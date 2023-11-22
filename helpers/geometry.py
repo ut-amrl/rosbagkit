@@ -105,7 +105,6 @@ def get_corners_3d_bbox(
         (2, 6),
         (3, 7),
     ]
-
     return frame_corners, edges
 
 

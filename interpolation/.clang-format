@@ -1,0 +1,6 @@
+BasedOnStyle: Google
+Standard: Cpp11
+BinPackArguments: false
+BinPackParameters: false
+CommentPragmas: NOINT.*
+ColumnLimit: 88

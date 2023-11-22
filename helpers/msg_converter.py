@@ -5,7 +5,6 @@ Description: A collection of functions to convert data to ROS messages
 """
 import rospy
 import numpy as np
-from numpy.lib.recfunctions import unstructured_to_structured
 from typing import Optional, Tuple
 
 from std_msgs.msg import Header
@@ -15,6 +14,8 @@ from nav_msgs.msg import Odometry
 
 from tf2_ros import TransformStamped
 import tf.transformations as tf_trans
+
+import open3d
 
 
 def np_to_pointcloud2(
@@ -27,7 +28,7 @@ def np_to_pointcloud2(
     Convert a numpy array to a sensor_msgs.msg.PointCloud2 message
 
     args:
-        points: (N, M) Numpy array of points where M depends on the point type
+        points: (N, M) numpy array of N points with M fields
         point_type: String with space-separated field names (e.g., "x y z i")
         frame_id: Frame in which the point cloud is defined
         time_stamp: rospy.Time() stamp to be used for the message
@@ -37,7 +38,7 @@ def np_to_pointcloud2(
     """
     field_names = point_type.split()
     assert points.shape[1] == len(field_names), "Points and point_type do not match"
-    
+
     # fmt: off
     field_types = {
         "x":         (np.float32, PointField.FLOAT32),
@@ -66,13 +67,13 @@ def np_to_pointcloud2(
         dtype.append((field_name, np_dtype))
 
     # Convert to structured array
-    points = unstructured_to_structured(points, dtype=dtype)
+    structured_points = np.core.records.fromarrays(points.T, dtype=dtype)
 
     # Define PointCloud2
     pc2_msg = PointCloud2()
     pc2_msg.header = Header()
     pc2_msg.header.frame_id = frame_id
-    pc2_msg.header.stamp = time_stamp if time_stamp is not None else rospy.Time.now()
+    pc2_msg.header.stamp = time_stamp or rospy.Time.now()
 
     pc2_msg.height = 1
     pc2_msg.width = points.shape[0]
@@ -82,9 +83,32 @@ def np_to_pointcloud2(
     pc2_msg.is_bigendian = False
     pc2_msg.is_dense = True
     pc2_msg.fields = fields
-    pc2_msg.data = points.tobytes()
+    pc2_msg.data = structured_points.tobytes()
 
     return pc2_msg
+
+
+def pcd_to_pointcloud2(
+    pcd_file: str,
+    point_type: str = "x y z",
+    frame_id: str = "base_link",
+    time_stamp: Optional[rospy.Time] = None,
+) -> PointCloud2:
+    """
+    Convert a PCD file to a sensor_msgs.msg.PointCloud2 message
+
+    Args:
+        pcd_file: Path to the PCD file
+        frame_id: Frame in which the point cloud is defined
+        time_stamp: rospy.Time() stamp to be used for the message
+
+    Returns:
+        sensor_msgs.msg.PointCloud2 message
+    """
+    pcd = open3d.io.read_point_cloud(pcd_file)
+    points = np.asarray(pcd.points)
+
+    return np_to_pointcloud2(points, point_type, frame_id, time_stamp)
 
 
 def np_to_imu(
@@ -104,7 +128,7 @@ def np_to_imu(
     imu_msg = Imu()
     imu_msg.header = Header()
     imu_msg.header.frame_id = frame_id
-    imu_msg.header.stamp = time_stamp if time_stamp is not None else rospy.Time.now()
+    imu_msg.header.stamp = time_stamp or rospy.Time.now()
 
     imu_msg.linear_acceleration.x = imu_data[0]
     imu_msg.linear_acceleration.y = imu_data[1]
@@ -144,7 +168,7 @@ def np_to_gps(
     return gps_msg
 
 
-def pose_stamped_from_quat(
+def pose_stamped_from_xyz_quat(
     pose: np.ndarray,
     frame_id: str = "base_link",
     time_stamp: Optional[rospy.Time] = None,
@@ -166,7 +190,7 @@ def pose_stamped_from_quat(
     pose_msg = PoseStamped()
     pose_msg.header = Header()
     pose_msg.header.frame_id = frame_id
-    pose_msg.header.stamp = time_stamp if time_stamp is not None else rospy.Time.now()
+    pose_msg.header.stamp = time_stamp or rospy.Time.now()
 
     # Define Pose
     pose_msg.pose.position.x = pose[0]
@@ -203,7 +227,7 @@ def pose_stamped_from_matrix(
     pose_msg = PoseStamped()
     pose_msg.header = Header()
     pose_msg.header.frame_id = frame_id
-    pose_msg.header.stamp = time_stamp if time_stamp is not None else rospy.Time.now()
+    pose_msg.header.stamp = time_stamp or rospy.Time.now()
 
     # Define Pose
     pose_msg.pose.position.x = pose[0, 3]
@@ -217,6 +241,85 @@ def pose_stamped_from_matrix(
     pose_msg.pose.orientation.z = quaternion[2]
 
     return pose_msg
+
+
+def odometry_from_xyz_quat(
+    pose: np.ndarray,
+    frame_id: str = "map",
+    child_frame_id: str = "base_link",
+    time_stamp: Optional[rospy.Time] = None,
+) -> Odometry:
+    """
+    Convert a numpy array (xyz and quaternion) to a nav_msgs.msg.Odometry message
+    
+    Args:
+        pose: (7,) Numpy array of pose data [x, y, z, qw, qx, qy, qz]
+        frame_id: frame id of header msgs
+        child_frame_id: child frame id of header msgs
+        time_stamp: time stamp of header msgs
+
+    Returns:
+        odom_msg: a nav_msgs.msg.Odometry msg
+    """
+    assert pose.shape == (7,), "Pose must be a 7D vector [x, y, z, qw, qx, qy, qz]"
+
+    # Define Odometry
+    odom_msg = Odometry()
+    odom_msg.header = Header()
+    odom_msg.header.frame_id = frame_id
+    odom_msg.header.stamp = time_stamp or rospy.Time.now()
+
+    odom_msg.child_frame_id = child_frame_id
+
+    odom_msg.pose.pose.position.x = pose[0]
+    odom_msg.pose.pose.position.y = pose[1]
+    odom_msg.pose.pose.position.z = pose[2]
+
+    odom_msg.pose.pose.orientation.w = pose[3]
+    odom_msg.pose.pose.orientation.x = pose[4]
+    odom_msg.pose.pose.orientation.y = pose[5]
+    odom_msg.pose.pose.orientation.z = pose[6]
+
+    return odom_msg
+
+
+def tf_msg_from_quat(
+    pose: np.ndarray,
+    frame_id: str = "base_link",
+    child_frame_id: str = "child_link",
+    time_stamp: Optional[rospy.Time] = None,
+) -> TransformStamped:
+    """
+    Convert a numpy array (xyz and quaternion) to a TFMessage message
+
+    Args:
+        pose: (7,) Numpy array of pose data [x, y, z, qw, qx, qy, qz]
+        frame_id: frame id of header msgs
+        child_frame_id: child frame id of header msgs
+        time_stamp: time stamp of header msgs
+
+    Returns:
+        tf_msg: a tf2_msgs.msg.TFMessage msg
+    """
+    assert pose.shape == (7,), "Pose must be a 7D vector [x, y, z, qw, qx, qy, qz]"
+
+    # Define TransformStamped
+    tf_msg = TransformStamped()
+    tf_msg.header.frame_id = frame_id
+    tf_msg.child_frame_id = child_frame_id
+    tf_msg.header.stamp = time_stamp or rospy.Time.now()
+
+    # Define Transform
+    tf_msg.transform.translation.x = pose[0]
+    tf_msg.transform.translation.y = pose[1]
+    tf_msg.transform.translation.z = pose[2]
+
+    tf_msg.transform.rotation.w = pose[3]
+    tf_msg.transform.rotation.x = pose[4]
+    tf_msg.transform.rotation.y = pose[5]
+    tf_msg.transform.rotation.z = pose[6]
+
+    return tf_msg
 
 
 def tf_msg_from_matrix(
@@ -243,7 +346,7 @@ def tf_msg_from_matrix(
     tf_msg = TransformStamped()
     tf_msg.header.frame_id = frame_id
     tf_msg.child_frame_id = child_frame_id
-    tf_msg.header.stamp = time_stamp if time_stamp is not None else rospy.Time.now()
+    tf_msg.header.stamp = time_stamp or rospy.Time.now()
 
     # Define Transform
     tf_msg.transform.translation.x = pose[0, 3]

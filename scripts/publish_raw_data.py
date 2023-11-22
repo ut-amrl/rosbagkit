@@ -1,5 +1,5 @@
 """
-Author:      Dongmyeong Lee (domlee[at]utexas[dot]edu)
+Author:      Dongmyeong Lee (domlee[at]utexas.edu)
 Date:        November 8, 2023
 Description: Publishes pointcloud and IMU data for LiDAR odometry.
 """
@@ -7,6 +7,7 @@ import os
 import pathlib
 import argparse
 from tqdm import tqdm
+import time
 
 import numpy as np
 
@@ -15,6 +16,7 @@ import cv2
 from cv_bridge import CvBridge
 
 from sensor_msgs.msg import PointCloud2, Imu, Image
+from rosgraph_msgs.msg import Clock
 
 from helpers.msg_converter import np_to_pointcloud2, np_to_imu
 
@@ -32,19 +34,13 @@ def get_parser():
     parser.add_argument(
         "--pointcloud_topic",
         type=str,
-        default="/points_raw",
+        default="/velodyne_points",
         help="Pointcloud topic name",
-    )
-    parser.add_argument(
-        "--lidar_frame",
-        type=str,
-        default="base_link",
-        help="Lidar frame name",
     )
     parser.add_argument(
         "--imu_topic",
         type=str,
-        default="/imu_raw",
+        default="/imu/data",
         help="IMU topic name",
     )
     parser.add_argument(
@@ -81,16 +77,14 @@ def process_pointcloud(bin_path, dt, frame_id, timestamp):
 
 
 def main(args):
-    # rospy.set_param("use_sim_time", True)
+    rospy.set_param("use_sim_time", True)
     rospy.init_node("CODa_raw_data_publisher")
-
-    # Define Frames
-    lidar_frame = args.lidar_frame
 
     # Define Publishers
     pc_pub = rospy.Publisher(args.pointcloud_topic, PointCloud2, queue_size=10)
     img_pub = rospy.Publisher(args.img_topic, Image, queue_size=10)
     imu_pub = rospy.Publisher(args.imu_topic, Imu, queue_size=2000)
+    clock_pub = rospy.Publisher("/clock", Clock, queue_size=10)
 
     # Define Paths
     dataset_path = pathlib.Path(args.dataset_path)
@@ -113,8 +107,6 @@ def main(args):
     imu_np = np.fromfile(imu_file, sep=" ").reshape(-1, 11)
 
     # Main Loop
-    rate = rospy.Rate(10)
-
     imu_last_idx = 0
     for frame, ts in tqdm(enumerate(timestamps), total=len(timestamps), miniters=1):
         # Publish IMU
@@ -124,7 +116,9 @@ def main(args):
             imu_pub.publish(imu_msg)
             imu_last_idx += 1
 
+        # timestamp for image and pointcloud
         timestamp = rospy.Time.from_sec(ts)
+        clock_pub.publish(timestamp)
 
         # Publish Image
         img_file = img_root_dir / f"2d_rect_cam0_{sequence}_{frame}.jpg"
@@ -134,15 +128,12 @@ def main(args):
         img_pub.publish(img_msg)
 
         # Publish Point Cloud
-        if frame == 0:
-            continue
-
-        dt = timestamps[frame] - timestamps[frame - 1]
+        dt = timestamps[frame + 1] - ts if (frame < len(timestamps) - 1) else 0.1
         pc_file = pc_root_dir / f"3d_raw_os1_{sequence}_{frame}.bin"
-        pc_msg = process_pointcloud(pc_file, dt, lidar_frame, timestamp)
+        pc_msg = process_pointcloud(pc_file, dt, "base_link", timestamp)
         pc_pub.publish(pc_msg)
 
-        rate.sleep()
+        time.sleep(0.1) # for Sim time
 
 
 if __name__ == "__main__":
