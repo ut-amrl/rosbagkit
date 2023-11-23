@@ -55,13 +55,13 @@ def get_parser():
         "--pose_type",
         choices=["dense", "correct", "keyframe"],
         default="dense",
-        help="Pose type (Options: dense, correct)",
+        help="Pose type (Options: dense, correct, keyframe)",
     )
     parser.add_argument(
         "--rate",
         type=float,
         default=0,
-        help="Publishing rate",
+        help="Publishing rate (0: no delay)",
     )
     parser.add_argument(
         "--pointcloud_topic",
@@ -124,24 +124,26 @@ def main(args):
         # Main Loop
         for pose in tqdm(pose_np, total=len(pose_np)):
             # Get Pose
-            ts, x, y, z, qw, qx, qy, qz = pose
-            frame = np.searchsorted(timestamp_np, ts, side="left")
-
-            ts = rospy.Time.from_sec(ts)
+            frame = np.searchsorted(timestamp_np, pose[0], side="left")
+            ts = rospy.Time.from_sec(pose[0])
 
             # Publish Clock
             clock_pub.publish(ts)
 
             # Publish LiDAR Pose and Path
-            odom_msg = odometry_from_xyz_quat(pose[1:], global_frame, lidar_frame, ts)
+            odom_msg = odometry_from_xyz_quat(
+                pose[1:4], pose[4:], global_frame, lidar_frame, ts
+            )
             odom_pub.publish(odom_msg)
 
-            pose_msg = pose_stamped_from_xyz_quat(pose[1:], global_frame, ts)
+            pose_msg = pose_stamped_from_xyz_quat(pose[1:4], pose[4:], global_frame, ts)
             global_path.poses.append(pose_msg)
             path_pub.publish(global_path)
 
             # Publish TF
-            tf_msg = tf_msg_from_quat(pose[1:], global_frame, lidar_frame, ts)
+            tf_msg = tf_msg_from_quat(
+                pose[1:4], pose[4:], global_frame, lidar_frame, ts
+            )
             tf_broadcaster.sendTransform(tf_msg)
 
             # Data Path (index of timestamp is the same as the index of frame)

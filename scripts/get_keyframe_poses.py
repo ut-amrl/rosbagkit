@@ -16,7 +16,7 @@ def get_parser():
     parser.add_argument(
         "--keyframe_poses_dir",
         type=str,
-        default="/home/dongmyeong/Projects/AMRL/CODa/correction/map",
+        default="/home/dongmyeong/Projects/AMRL/CODa/correction/map/0_4",
         help="Path to the keyframe poses directory (output of interactive_slam)",
     )
     parser.add_argument(

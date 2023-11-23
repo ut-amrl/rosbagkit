@@ -23,9 +23,10 @@ DEFINE_string(dataset_path, "/home/dongmyeong/Projects/AMRL/CODa", "The dataset 
 namespace ut_amrl::slam {
 namespace {
 
-void buildInterpolationOptimizationProblem(const MapOfPoses3d<double>& kf_poses,
-                                           const MapOfPoses3d<double>& odom_poses,
-                                           MapOfPoses3d<double>* poses,
+template <typename T>
+void buildInterpolationOptimizationProblem(const MapOfPoses3d<T>& kf_poses,
+                                           const MapOfPoses3d<T>& odom_poses,
+                                           MapOfPoses3d<T>* poses,
                                            ceres::Problem* problem) {
   CHECK_NOTNULL(poses);
   CHECK_NOTNULL(problem);
@@ -65,7 +66,7 @@ void buildInterpolationOptimizationProblem(const MapOfPoses3d<double>& kf_poses,
       kf_pose_interp.p = kf_pose_lower.p + (kf_pose_upper.p - kf_pose_lower.p) *
                                                (timestamp - kf_lower->first) /
                                                (kf_upper->first - kf_lower->first);
-      Eigen::Quaterniond q_interp = kf_pose_lower.q.slerp(
+      Eigen::Quaternion<T> q_interp = kf_pose_lower.q.slerp(
           (timestamp - kf_lower->first) / (kf_upper->first - kf_lower->first),
           kf_pose_upper.q);
       kf_pose_interp.q = q_interp.normalized();
@@ -78,7 +79,7 @@ void buildInterpolationOptimizationProblem(const MapOfPoses3d<double>& kf_poses,
   // Get the relative poses between the odometry poses.
   // The relative poses are used as constraints for the pose graph optimization.
   // TODO: Handle the case when the keyframe and odometry poses are not aligned.
-  VectorOfRelativePoses3d<double> relative_poses;
+  VectorOfRelativePoses3d<T> relative_poses;
   for (auto odom_it = odom_poses.begin(); odom_it != odom_poses.end(); ++odom_it) {
     auto odom_next_it = std::next(odom_it);
     if (odom_next_it == odom_poses.end()) {
@@ -89,7 +90,7 @@ void buildInterpolationOptimizationProblem(const MapOfPoses3d<double>& kf_poses,
     const auto& odom_pose_end = odom_next_it->second;
 
     // Get the relative pose between the odometry poses.
-    RelativePose3d<double> relative_pose;
+    RelativePose3d<T> relative_pose;
     relative_pose.id_begin = odom_it->first;
     relative_pose.id_end = odom_next_it->first;
 
@@ -98,7 +99,7 @@ void buildInterpolationOptimizationProblem(const MapOfPoses3d<double>& kf_poses,
     relative_pose.t_be.p = q_begin_inverse * (odom_pose_end.p - odom_pose_begin.p);
 
     // Set the information matrix for the relative pose.
-    relative_pose.sqrt_information = Eigen::Matrix<double, 6, 6>::Zero();
+    relative_pose.sqrt_information = Eigen::Matrix<T, 6, 6>::Zero();
     relative_pose.sqrt_information.diagonal() << 10, 10, 10, 5, 5, 5;
 
     relative_poses.push_back(relative_pose);

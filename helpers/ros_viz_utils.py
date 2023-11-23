@@ -12,9 +12,7 @@ from scipy.spatial.transform import Rotation
 from geometry_msgs.msg import Point, PoseStamped
 from visualization_msgs.msg import Marker, MarkerArray
 
-from helpers.geometry import get_corners_3d_bbox
-
-Bbox_3D = Tuple[float, float, float, float, float, float, float, float, float]
+from helpers.geometry import get_corners_bbox_3d
 
 
 def clear_marker_array(publisher: rospy.Publisher) -> None:
@@ -23,20 +21,18 @@ def clear_marker_array(publisher: rospy.Publisher) -> None:
 
     Args:
         publisher: a publisher to a marker topic
-
-    Returns:
-        None
     """
     delete_all_marker = Marker(id=0, ns="delete_markerarray", action=Marker.DELETEALL)
     publisher.publish(MarkerArray([delete_all_marker]))
+    return
 
 
-def create_3d_bbox_marker(
-    bbox_3d: Bbox_3D,
+def create_bbox_3d_marker(
+    bbox_3d: np.ndarray,
     frame_id: str,
     time_stamp: rospy.Time,
-    namespace: str = "",
     marker_id: int = 0,
+    namespace: str = "",
     color: Tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
     scale: float = 0.1,
 ) -> Marker:
@@ -44,12 +40,12 @@ def create_3d_bbox_marker(
     Create a 3D bounding box marker
 
     Args:
-        bbox_3d: 3D bounding box (cx, cy, cz, l, w, h, roll, pitch, yaw)
+        bbox_3d: (9,) 3D bounding box (cx, cy, cz, h, l, w, roll, pitch, yaw)
         frame_id: frame id of header msgs
         time_stamp: time stamp of header msgs
         namespace: namespace of the bounding box
         marker_id: id of the bounding box
-        color: RGBA color of the bounding box
+        color: RGBA or RGB color of the bounding box
         scale: scale of line width
 
     Returns:
@@ -69,7 +65,7 @@ def create_3d_bbox_marker(
     marker.color.r = color[0]
     marker.color.g = color[1]
     marker.color.b = color[2]
-    marker.color.a = color[3]
+    marker.color.a = color[3] if len(color) == 4 else 1.0
     marker.scale.x = scale
 
     marker.pose.orientation.w = 1.0
@@ -78,7 +74,7 @@ def create_3d_bbox_marker(
     marker.pose.orientation.z = 0.0
 
     # Get 3D bounding box corners
-    corners, edges = get_corners_3d_bbox(*bbox_3d)
+    corners, edges = get_corners_bbox_3d(bbox_3d)
 
     for start, end in edges:
         start_pt = Point(*corners[start, :])

@@ -5,14 +5,18 @@ Description: ROS utility functions
 """
 
 import time
-from typing import List
+from typing import List, Union
 
 import rospy
 
 
 def wait_for_subscribers(
-    publishers: List[rospy.Publisher], timeout: rospy.Duration = None
+    publishers: Union[rospy.Publisher, List[rospy.Publisher]],
+    timeout: rospy.Duration = None,
 ) -> bool:
+    if not isinstance(publishers, list):
+        publishers = [publishers]
+
     use_sim_time = rospy.get_param("/use_sim_time", False)
 
     rate = rospy.Rate(10) if not use_sim_time else None

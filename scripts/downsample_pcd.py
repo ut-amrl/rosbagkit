@@ -7,13 +7,13 @@ def get_parser():
     parser.add_argument(
         "--input",
         type=str,
-        default="/home/dongmyeong/Projects/AMRL/CODa/correction/map.pcd",
+        default="/home/dongmyeong/Projects/AMRL/CODa/correction/map/0_4.pcd",
         help="input point cloud",
     )
     parser.add_argument(
         "--output",
         type=str,
-        default="/home/dongmyeong/Projects/AMRL/CODa/correction/map_downsampled.pcd",
+        default="/home/dongmyeong/Projects/AMRL/CODa/correction/downsampled_map_0_4.pcd",
         help="output point cloud",
     )
     parser.add_argument("--voxel_size", type=float, default=0.05, help="voxel size")

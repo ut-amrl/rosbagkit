@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 import numpy as np
 
-from liegroups import SE3, SO3
+from manifpy import SE3, SO3
 
 
 def get_parser():
@@ -29,21 +29,16 @@ def get_parser():
 
 def xyz_quaternion_to_SE3(x, y, z, qw, qx, qy, qz) -> SE3:
     """Convert the [x, y, z, qw, qx, qy, qz] to an SE(3) transformation matrix"""
-    r = SO3.from_quaternion([qw, qx, qy, qz], "wxyz")
-
-    transformation_matrix = np.eye(4)
-    transformation_matrix[:3, :3] = r.as_matrix()
-    transformation_matrix[:3, 3] = [x, y, z]
-
-    return SE3.from_matrix(transformation_matrix)
+    position = np.array([x, y, z])
+    quaternion = np.array([qx, qy, qz, qw])
+    quaternion /= np.linalg.norm(quaternion)
+    return SE3(position, quaternion)
 
 
-def SE3_to_xyz_quaternion(transformation_matrix: np.ndarray) -> np.ndarray:
+def SE3_to_xyz_quaternion(X: SE3) -> np.ndarray:
     """Convert the SE(3) transformation matrix to [x, y, z, qw, qx, qy, qz]"""
-    r = SO3.from_matrix(transformation_matrix[:3, :3])
-    t = transformation_matrix[:3, 3]
-
-    return np.concatenate([t, r.to_quaternion("wxyz")])
+    x, y, z, qx, qy, qz, qw = X.coeffs()
+    return np.array([x, y, z, qw, qx, qy, qz])
 
 
 def densify_pose(poses, timestamps, dense_timestamps):
@@ -66,8 +61,7 @@ def densify_pose(poses, timestamps, dense_timestamps):
     for i, pose in enumerate(poses):
         poses_SE3.append(xyz_quaternion_to_SE3(*pose))
         if i > 0:
-            pose_change = poses_SE3[i - 1].inv().as_matrix() @ poses_SE3[i].as_matrix()
-            xi = SE3.from_matrix(pose_change, True).log()
+            xi = poses_SE3[i] - poses_SE3[i - 1]  # log(X_prev^-1 * X_curr)
             pose_changes_se3.append(xi)
 
     # Interpolate the pose changes
@@ -95,9 +89,7 @@ def densify_pose(poses, timestamps, dense_timestamps):
 
             # Interpolate the pose change
             xi = pose_changes_se3[lower_idx]
-            interpolated_pose = (
-                poses_SE3[lower_idx].as_matrix() @ SE3.exp(t * xi).as_matrix()
-            )
+            interpolated_pose = poses_SE3[lower_idx] + (t * xi)
             densified_pose = SE3_to_xyz_quaternion(interpolated_pose)
 
         densified_poses.append(densified_pose)

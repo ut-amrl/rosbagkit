@@ -3,17 +3,16 @@ Author:      Dongmyeong Lee (domlee[at]utexas.edu)
 Date:        September 16, 2023
 Description: A collection of functions to convert data to ROS messages
 """
+from typing import Optional, Tuple, Literal
 import rospy
 import numpy as np
-from typing import Optional, Tuple
+from scipy.spatial.transform import Rotation as R
 
 from std_msgs.msg import Header
 from sensor_msgs.msg import PointCloud2, PointField, Imu
 from geometry_msgs.msg import Point, PoseStamped
 from nav_msgs.msg import Odometry
-
 from tf2_ros import TransformStamped
-import tf.transformations as tf_trans
 
 import open3d
 
@@ -169,22 +168,27 @@ def np_to_gps(
 
 
 def pose_stamped_from_xyz_quat(
-    pose: np.ndarray,
+    position: np.ndarray,
+    quaternion: np.ndarray,
     frame_id: str = "base_link",
     time_stamp: Optional[rospy.Time] = None,
+    quat_order: Literal["xyzw", "wxyz"] = "wxyz",
 ) -> PoseStamped:
     """
     Convert a numpy array (xyz and quaternion) to a PoseStamped message
 
     Args:
-        pose: (7,) Numpy array of pose data [x, y, z, qw, qx, qy, qz]
+        position: (3,) Numpy array of position data [x, y, z]
+        quaternion: (4,) Numpy array of quaternion data [qw, qx, qy, qz]
         frame_id: frame id of header msgs
         time_stamp: time stamp of header msgs
+        quat_order: order of quaternion (default: wxyz)
 
     Returns:
         pose_msg: a PoseStamped msg
     """
-    assert pose.shape == (7,), "Pose must be a 7D vector [x, y, z, qw, qx, qy, qz]"
+    assert position.shape == (3,), "Position must be a 3D vector [x, y, z]"
+    assert quaternion.shape == (4,), "Quaternion must be a 4D vector [qw, qx, qy, qz]"
 
     # Define PoseStamped
     pose_msg = PoseStamped()
@@ -193,20 +197,28 @@ def pose_stamped_from_xyz_quat(
     pose_msg.header.stamp = time_stamp or rospy.Time.now()
 
     # Define Pose
-    pose_msg.pose.position.x = pose[0]
-    pose_msg.pose.position.y = pose[1]
-    pose_msg.pose.position.z = pose[2]
+    pose_msg.pose.position.x = position[0]
+    pose_msg.pose.position.y = position[1]
+    pose_msg.pose.position.z = position[2]
 
-    pose_msg.pose.orientation.w = pose[3]
-    pose_msg.pose.orientation.x = pose[4]
-    pose_msg.pose.orientation.y = pose[5]
-    pose_msg.pose.orientation.z = pose[6]
+    if quat_order == "wxyz":
+        pose_msg.pose.orientation.w = quaternion[0]
+        pose_msg.pose.orientation.x = quaternion[1]
+        pose_msg.pose.orientation.y = quaternion[2]
+        pose_msg.pose.orientation.z = quaternion[3]
+    elif quat_order == "xyzw":
+        pose_msg.pose.orientation.w = quaternion[3]
+        pose_msg.pose.orientation.x = quaternion[0]
+        pose_msg.pose.orientation.y = quaternion[1]
+        pose_msg.pose.orientation.z = quaternion[2]
+    else:
+        raise ValueError(f"Quaternion order {quat_order} is not supported")
 
     return pose_msg
 
 
 def pose_stamped_from_matrix(
-    pose: np.ndarray,
+    transformation: np.ndarray,
     frame_id: str = "base_link",
     time_stamp: Optional[rospy.Time] = None,
 ) -> PoseStamped:
@@ -214,14 +226,14 @@ def pose_stamped_from_matrix(
     Convert a numpy array (4x4 transformation matrix) to a PoseStamped message
 
     Args:
-        pose: (4, 4) transformation matrix
+        transformation: (4, 4) transformation matrix
         frame_id: frame id of header msgs
         time_stamp: time stamp of header msgs
 
     Returns:
         pose_msg: a PoseStamped msg
     """
-    assert pose.shape == (4, 4), "Pose must be a 4x4 transformation matrix"
+    assert transformation.shape == (4, 4), "Transformation must be a 4x4 matrix"
 
     # Define PoseStamped
     pose_msg = PoseStamped()
@@ -230,11 +242,11 @@ def pose_stamped_from_matrix(
     pose_msg.header.stamp = time_stamp or rospy.Time.now()
 
     # Define Pose
-    pose_msg.pose.position.x = pose[0, 3]
-    pose_msg.pose.position.y = pose[1, 3]
-    pose_msg.pose.position.z = pose[2, 3]
+    pose_msg.pose.position.x = transformation[0, 3]
+    pose_msg.pose.position.y = transformation[1, 3]
+    pose_msg.pose.position.z = transformation[2, 3]
 
-    quaternion = tf_trans.quaternion_from_matrix(pose)
+    quaternion = R.from_matrix(transformation[:3, :3]).as_quat()
     pose_msg.pose.orientation.w = quaternion[3]
     pose_msg.pose.orientation.x = quaternion[0]
     pose_msg.pose.orientation.y = quaternion[1]
@@ -244,24 +256,29 @@ def pose_stamped_from_matrix(
 
 
 def odometry_from_xyz_quat(
-    pose: np.ndarray,
+    position: np.ndarray,
+    quaternion: np.ndarray,
     frame_id: str = "map",
     child_frame_id: str = "base_link",
     time_stamp: Optional[rospy.Time] = None,
+    quat_order: Literal["xyzw", "wxyz"] = "wxyz",
 ) -> Odometry:
     """
     Convert a numpy array (xyz and quaternion) to a nav_msgs.msg.Odometry message
-    
+
     Args:
-        pose: (7,) Numpy array of pose data [x, y, z, qw, qx, qy, qz]
+        position: (3,) Numpy array of position data [x, y, z]
+        quaternion: (4,) Numpy array of quaternion data [qw, qx, qy, qz]
         frame_id: frame id of header msgs
         child_frame_id: child frame id of header msgs
         time_stamp: time stamp of header msgs
+        quat_order: order of quaternion (default: wxyz)
 
     Returns:
         odom_msg: a nav_msgs.msg.Odometry msg
     """
-    assert pose.shape == (7,), "Pose must be a 7D vector [x, y, z, qw, qx, qy, qz]"
+    assert position.shape == (3,), "Position must be a 3D vector [x, y, z]"
+    assert quaternion.shape == (4,), "Quaternion must be a 4D vector [qw, qx, qy, qz]"
 
     # Define Odometry
     odom_msg = Odometry()
@@ -271,37 +288,50 @@ def odometry_from_xyz_quat(
 
     odom_msg.child_frame_id = child_frame_id
 
-    odom_msg.pose.pose.position.x = pose[0]
-    odom_msg.pose.pose.position.y = pose[1]
-    odom_msg.pose.pose.position.z = pose[2]
+    odom_msg.pose.pose.position.x = position[0]
+    odom_msg.pose.pose.position.y = position[1]
+    odom_msg.pose.pose.position.z = position[2]
 
-    odom_msg.pose.pose.orientation.w = pose[3]
-    odom_msg.pose.pose.orientation.x = pose[4]
-    odom_msg.pose.pose.orientation.y = pose[5]
-    odom_msg.pose.pose.orientation.z = pose[6]
+    if quat_order == "wxyz":
+        odom_msg.pose.pose.orientation.w = quaternion[0]
+        odom_msg.pose.pose.orientation.x = quaternion[1]
+        odom_msg.pose.pose.orientation.y = quaternion[2]
+        odom_msg.pose.pose.orientation.z = quaternion[3]
+    elif quat_order == "xyzw":
+        odom_msg.pose.pose.orientation.w = quaternion[3]
+        odom_msg.pose.pose.orientation.x = quaternion[0]
+        odom_msg.pose.pose.orientation.y = quaternion[1]
+        odom_msg.pose.pose.orientation.z = quaternion[2]
+    else:
+        raise ValueError(f"Quaternion order {quat_order} is not supported")
 
     return odom_msg
 
 
 def tf_msg_from_quat(
-    pose: np.ndarray,
+    position: np.ndarray,
+    quaternion: np.ndarray,
     frame_id: str = "base_link",
     child_frame_id: str = "child_link",
     time_stamp: Optional[rospy.Time] = None,
+    quat_order: Literal["xyzw", "wxyz"] = "wxyz",
 ) -> TransformStamped:
     """
     Convert a numpy array (xyz and quaternion) to a TFMessage message
 
     Args:
-        pose: (7,) Numpy array of pose data [x, y, z, qw, qx, qy, qz]
+        position: (3,) Numpy array of position data [x, y, z]
+        quaternion: (4,) Numpy array of quaternion data [qw, qx, qy, qz]
         frame_id: frame id of header msgs
         child_frame_id: child frame id of header msgs
         time_stamp: time stamp of header msgs
+        quat_order: order of quaternion (default: wxyz)
 
     Returns:
         tf_msg: a tf2_msgs.msg.TFMessage msg
     """
-    assert pose.shape == (7,), "Pose must be a 7D vector [x, y, z, qw, qx, qy, qz]"
+    assert position.shape == (3,), "Position must be a 3D vector [x, y, z]"
+    assert quaternion.shape == (4,), "Quaternion must be a 4D vector [qw, qx, qy, qz]"
 
     # Define TransformStamped
     tf_msg = TransformStamped()
@@ -310,20 +340,28 @@ def tf_msg_from_quat(
     tf_msg.header.stamp = time_stamp or rospy.Time.now()
 
     # Define Transform
-    tf_msg.transform.translation.x = pose[0]
-    tf_msg.transform.translation.y = pose[1]
-    tf_msg.transform.translation.z = pose[2]
+    tf_msg.transform.translation.x = position[0]
+    tf_msg.transform.translation.y = position[1]
+    tf_msg.transform.translation.z = position[2]
 
-    tf_msg.transform.rotation.w = pose[3]
-    tf_msg.transform.rotation.x = pose[4]
-    tf_msg.transform.rotation.y = pose[5]
-    tf_msg.transform.rotation.z = pose[6]
+    if quat_order == "wxyz":
+        tf_msg.transform.rotation.w = quaternion[0]
+        tf_msg.transform.rotation.x = quaternion[1]
+        tf_msg.transform.rotation.y = quaternion[2]
+        tf_msg.transform.rotation.z = quaternion[3]
+    elif quat_order == "xyzw":
+        tf_msg.transform.rotation.w = quaternion[3]
+        tf_msg.transform.rotation.x = quaternion[0]
+        tf_msg.transform.rotation.y = quaternion[1]
+        tf_msg.transform.rotation.z = quaternion[2]
+    else:
+        raise ValueError(f"Quaternion order {quat_order} is not supported")
 
     return tf_msg
 
 
 def tf_msg_from_matrix(
-    pose: np.ndarray,
+    transformation: np.ndarray,
     frame_id: str = "base_link",
     child_frame_id: str = "child_link",
     time_stamp: Optional[rospy.Time] = None,
@@ -332,7 +370,7 @@ def tf_msg_from_matrix(
     Convert a numpy array (4x4 transformation matrix) to a TFMessage message
 
     Args:
-        pose: (4, 4) transformation matrix
+        transformation: (4, 4) transformation matrix
         frame_id: frame id of header msgs
         child_frame_id: child frame id of header msgs
         time_stamp: time stamp of header msgs
@@ -340,7 +378,7 @@ def tf_msg_from_matrix(
     Returns:
         tf_msg: a tf2_msgs.msg.TFMessage msg
     """
-    assert pose.shape == (4, 4), "Transformation must be a 4x4 transformation matrix"
+    assert transformation.shape == (4, 4), "Transformation must be a 4x4 matrix"
 
     # Define TransformStamped
     tf_msg = TransformStamped()
@@ -349,14 +387,14 @@ def tf_msg_from_matrix(
     tf_msg.header.stamp = time_stamp or rospy.Time.now()
 
     # Define Transform
-    tf_msg.transform.translation.x = pose[0, 3]
-    tf_msg.transform.translation.y = pose[1, 3]
-    tf_msg.transform.translation.z = pose[2, 3]
+    tf_msg.transform.translation.x = transformation[0, 3]
+    tf_msg.transform.translation.y = transformation[1, 3]
+    tf_msg.transform.translation.z = transformation[2, 3]
 
-    quaternion = tf_trans.quaternion_from_matrix(pose)
-    tf_msg.transform.rotation.w = quaternion[3]
-    tf_msg.transform.rotation.x = quaternion[0]
-    tf_msg.transform.rotation.y = quaternion[1]
-    tf_msg.transform.rotation.z = quaternion[2]
+    quaternion = R.from_matrix(transformation[:3, :3]).as_quat()
+    pose_msg.pose.orientation.w = quaternion[3]
+    pose_msg.pose.orientation.x = quaternion[0]
+    pose_msg.pose.orientation.y = quaternion[1]
+    pose_msg.pose.orientation.z = quaternion[2]
 
     return tf_msg
