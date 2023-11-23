@@ -6,8 +6,6 @@ from tqdm import tqdm
 
 import numpy as np
 
-from liegroups import SE3, SO3
-
 from helpers.coda_utils import load_keyframe_pose
 
 
@@ -16,7 +14,7 @@ def get_parser():
     parser.add_argument(
         "--keyframe_poses_dir",
         type=str,
-        default="/home/dongmyeong/Projects/AMRL/CODa/correction/map/0_4",
+        default="/home/dongmyeong/Projects/AMRL/CODa/correction/map/0_5",
         help="Path to the keyframe poses directory (output of interactive_slam)",
     )
     parser.add_argument(
@@ -29,17 +27,20 @@ def get_parser():
     return parser
 
 
-def get_relevant_keyframes(keyframes, timestamps, max_time_diff=100):
+def get_relevant_keyframes(
+    keyframes: np.array, timestamps: np.array, max_time_diff: int = 100
+) -> np.array:
     """
     Get the relevant keyframes that are within the timestamps
     excluding keyframes that differ by more than max_time_diff
 
     Args:
-        keyframes: [K, 8] array of poses [timestamp, x, y, z, qw, qx, qy, qz]
-        timestamps: [T] array of timestamps
+        keyframes: (K, 8) array of poses [timestamp, x, y, z, qw, qx, qy, qz]
+        timestamps: (T,) array of timestamps
+        max_time_diff: maximum time difference between the keyframe and the timestamp
 
     Returns:
-        relevant_keyframes: [K', 8] array of poses [timestamp, x, y, z, qw, qx, qy, qz]
+        relevant_keyframes: (K', 8) array of poses [timestamp, x, y, z, qw, qx, qy, qz]
     """
     min_ts, max_ts = timestamps[0], timestamps[-1]
 

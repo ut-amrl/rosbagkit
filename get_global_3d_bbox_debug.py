@@ -87,9 +87,9 @@ def get_parser():
     return parser
 
 
-def group_average_bbox(bboxes: np.ndarray, threshold: float = 1.0) -> np.ndarray:
+def cluster_average_bbox_3d(bboxes: np.ndarray, threshold: float = 1.0) -> np.ndarray:
     """
-    Grouping and averaging 3D bounding boxes
+    Clustering and averaging 3D bounding boxes
 
     Args:
         bboxes: (N, 9) array of 3D bounding boxes (cx, cy, cz, h, l, w, r, p, y)
@@ -105,7 +105,7 @@ def group_average_bbox(bboxes: np.ndarray, threshold: float = 1.0) -> np.ndarray
     centroids = np.array([bbox[:3] for bbox in bboxes])
     clustering = DBSCAN(eps=threshold, min_samples=1).fit(centroids)
 
-    # Grouping
+    # Clustering
     labels = clustering.labels_
     unique_labels = set(labels)
 
@@ -113,6 +113,10 @@ def group_average_bbox(bboxes: np.ndarray, threshold: float = 1.0) -> np.ndarray
     averaged_bboxes = []
     for label in unique_labels:
         cluster_bboxes = bboxes[labels == label]
+
+        # Skip if there is only one bbox
+        if len(cluster_bboxes) < 2:
+            continue
 
         avg_centroid_dim = np.mean(cluster_bboxes[:, :6], axis=0)
         avg_rpy = average_rpy(cluster_bboxes[:, 6:])
@@ -150,7 +154,7 @@ def main(args):
     }
 
     # Start-up delay
-    wait_for_subscribers([pc_pub])
+    # wait_for_subscribers([pc_pub])
 
     # Data Path
     dataset_path = pathlib.Path(args.dataset)
@@ -177,53 +181,53 @@ def main(args):
         for pose in tqdm(pose_np, total=len(pose_np)):
             # Get Pose
             frame = np.searchsorted(timestamp_np, pose[0], side="left")
-            ts = rospy.Time.from_sec(pose[0])
+            # ts = rospy.Time.from_sec(pose[0])
 
-            # Publish Clock
-            clock_pub.publish(ts)
+            # # Publish Clock
+            # clock_pub.publish(ts)
 
-            # Publish LiDAR Odometry and Path
-            odom_msg = odometry_from_xyz_quat(
-                pose[1:4], pose[4:], global_frame, lidar_frame, ts
-            )
-            odom_pub.publish(odom_msg)
+            # # Publish LiDAR Odometry and Path
+            # odom_msg = odometry_from_xyz_quat(
+                # pose[1:4], pose[4:], global_frame, lidar_frame, ts
+            # )
+            # odom_pub.publish(odom_msg)
 
-            pose_msg = pose_stamped_from_xyz_quat(pose[1:4], pose[4:], global_frame, ts)
-            global_path.poses.append(pose_msg)
-            path_pub.publish(global_path)
+            # pose_msg = pose_stamped_from_xyz_quat(pose[1:4], pose[4:], global_frame, ts)
+            # global_path.poses.append(pose_msg)
+            # path_pub.publish(global_path)
 
-            # Publish TF
-            tf_msg = tf_msg_from_quat(
-                pose[1:4], pose[4:], global_frame, lidar_frame, ts
-            )
-            tf_broadcaster.sendTransform(tf_msg)
+            # # Publish TF
+            # tf_msg = tf_msg_from_quat(
+                # pose[1:4], pose[4:], global_frame, lidar_frame, ts
+            # )
+            # tf_broadcaster.sendTransform(tf_msg)
 
-            # Transformation Matrix from Global to LiDAR
-            H_lg = np.eye(4)
-            H_lg[:3, :3] = R.from_quat(pose[[5, 6, 7, 4]]).as_matrix()
-            H_lg[:3, 3] = pose[1:4]
-
-            # Data Path
-            pc_file = pc_root_dir / f"3d_comp_os1_{sequence}_{frame}.bin"
-            img_files = {
-                cam: img_root_dirs[cam] / f"2d_rect_{cam}_{sequence}_{frame}.jpg"
-                for cam in cam_list
-            }
+            # # Data Path
+            # pc_file = pc_root_dir / f"3d_comp_os1_{sequence}_{frame}.bin"
+            # img_files = {
+                # cam: img_root_dirs[cam] / f"2d_rect_{cam}_{sequence}_{frame}.jpg"
+                # for cam in cam_list
+            # }
             bbox_3d_file = bbox_3d_root_dir / f"3d_bbox_os1_{sequence}_{frame}.json"
 
             if not os.path.exists(bbox_3d_file):
                 continue
 
-            # Publish Pointcloud
-            pc_np = np.fromfile(pc_file, dtype=np.float32).reshape(-1, 4)
-            pc_msg = np_to_pointcloud2(pc_np, "x y z intensity", lidar_frame, ts)
-            pc_pub.publish(pc_msg)
+            # # Publish Pointcloud
+            # pc_np = np.fromfile(pc_file, dtype=np.float32).reshape(-1, 4)
+            # pc_msg = np_to_pointcloud2(pc_np, "x y z intensity", lidar_frame, ts)
+            # pc_pub.publish(pc_msg)
 
-            # Publish Images
-            for cam in cam_list:
-                img = cv2.imread(str(img_files[cam]))
-                img_msg = CvBridge().cv2_to_imgmsg(img, "bgr8")
-                img_pubs[cam].publish(img_msg)
+            # # Publish Images
+            # for cam in cam_list:
+                # img = cv2.imread(str(img_files[cam]))
+                # img_msg = CvBridge().cv2_to_imgmsg(img, "bgr8")
+                # img_pubs[cam].publish(img_msg)
+
+            # Transformation Matrix from Global to LiDAR
+            H_lg = np.eye(4)
+            H_lg[:3, :3] = R.from_quat(pose[[5, 6, 7, 4]]).as_matrix()
+            H_lg[:3, 3] = pose[1:4]
 
             # Get 3D Bounding Box
             bbox_3d_json = json.load(open(bbox_3d_file, "r"))
@@ -242,30 +246,71 @@ def main(args):
                 bbox_global = transform_bbox_3d(bbox, H_lg)
                 bboxes[class_name] = np.vstack([bboxes[class_name], bbox_global])
 
-            # Get Averaged Bbox
-            averaged_bboxes = {
-                class_name: group_average_bbox(bboxes[class_name])
-                for class_name in classes
+            # # Get Averaged Bbox
+            # averaged_bboxes = {
+                # class_name: cluster_average_bbox_3d(bboxes[class_name])
+                # for class_name in classes
+            # }
+
+            # # Publish 3D Bounding Box
+            # for class_name in classes:
+                # marker_array = MarkerArray()
+                # for idx, bbox in enumerate(averaged_bboxes[class_name]):
+                    # bbox_marker = create_bbox_3d_marker(
+                        # bbox,
+                        # global_frame,
+                        # ts,
+                        # idx,
+                        # color=classes[class_name]["color"],
+                    # )
+                    # marker_array.markers.append(bbox_marker)
+                # clear_marker_array(object_pubs[class_name])
+                # object_pubs[class_name].publish(marker_array)
+
+            # # Wait for next frame
+            # if args.rate > 0:
+                # time.sleep(1 / args.rate)
+
+    # Get Averaged Bbox
+    averaged_bboxes = {
+        class_name: cluster_average_bbox_3d(bboxes[class_name])
+        for class_name in classes
+    }
+    # Publish 3D Bounding Box
+    for class_name in classes:
+        marker_array = MarkerArray()
+        for idx, bbox in enumerate(averaged_bboxes[class_name]):
+            bbox_marker = create_bbox_3d_marker(
+                bbox_3d=bbox,
+                frame_id=global_frame,
+                marker_id=idx,
+                color=classes[class_name]["color"],
+            )
+            marker_array.markers.append(bbox_marker)
+        clear_marker_array(object_pubs[class_name])
+        object_pubs[class_name].publish(marker_array)
+
+    # Save 3D Bounding Box in Global Frame to JSON
+    for class_name in classes:
+        bbox_3d_json = {"3dbbox": []}
+        for idx, bbox in enumerate(averaged_bboxes[class_name]):
+            bbox_3d = {
+                "classId": class_name,
+                "instanceId": class_name + "_" + str(idx),
+                "cX": bbox[0],
+                "cY": bbox[1],
+                "cZ": bbox[2],
+                "h": bbox[3],
+                "l": bbox[4],
+                "w": bbox[5],
+                "r": bbox[6],
+                "p": bbox[7],
+                "y": bbox[8],
             }
+            bbox_3d_json["3dbbox"].append(bbox_3d)
 
-            # Publish 3D Bounding Box
-            for class_name in classes:
-                marker_array = MarkerArray()
-                for idx, bbox in enumerate(averaged_bboxes[class_name]):
-                    bbox_marker = create_bbox_3d_marker(
-                        bbox,
-                        global_frame,
-                        ts,
-                        idx,
-                        color=classes[class_name]["color"],
-                    )
-                    marker_array.markers.append(bbox_marker)
-                clear_marker_array(object_pubs[class_name])
-                object_pubs[class_name].publish(marker_array)
-
-            # Wait for next frame
-            if args.rate > 0:
-                time.sleep(1 / args.rate)
+        bbox_3d_file = dataset_path / "3d_bbox" / "global" / f"{class_name}.json"
+        json.dump(bbox_3d_json, open(bbox_3d_file, "w"), indent=4)
 
 
 if __name__ == "__main__":

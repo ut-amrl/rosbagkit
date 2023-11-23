@@ -30,7 +30,7 @@ def clear_marker_array(publisher: rospy.Publisher) -> None:
 def create_bbox_3d_marker(
     bbox_3d: np.ndarray,
     frame_id: str,
-    time_stamp: rospy.Time,
+    timestamp: rospy.Time = None,
     marker_id: int = 0,
     namespace: str = "",
     color: Tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
@@ -42,7 +42,7 @@ def create_bbox_3d_marker(
     Args:
         bbox_3d: (9,) 3D bounding box (cx, cy, cz, h, l, w, roll, pitch, yaw)
         frame_id: frame id of header msgs
-        time_stamp: time stamp of header msgs
+        timestamp: timestamp of header msgs
         namespace: namespace of the bounding box
         marker_id: id of the bounding box
         color: RGBA or RGB color of the bounding box
@@ -54,9 +54,7 @@ def create_bbox_3d_marker(
     # Create the LineList marker
     marker = Marker()
     marker.header.frame_id = frame_id
-    if type(time_stamp) is not rospy.Time:
-        time_stamp = rospy.Time.from_sec(time_stamp)
-    marker.header.stamp = time_stamp
+    marker.header.stamp = timestamp or rospy.Time.now()
     marker.ns = namespace
     marker.id = marker_id
     marker.type = Marker.LINE_LIST
@@ -88,7 +86,7 @@ def create_text_marker(
     text: str,
     coords: Tuple[float, float, float],
     frame_id: str,
-    time_stamp: rospy.Time,
+    timestamp: rospy.Time = None,
     namespace: str = "",
     marker_id: int = 0,
     color: Tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
@@ -101,7 +99,7 @@ def create_text_marker(
         text: text to be displayed
         coords: 3D coordinates of the text
         frame_id: frame id of header msgs
-        time_stamp: time stamp of header msgs
+        timestamp: timestamp of header msgs
         namespace: namespace of the text
         marker_id: id of the text
         color: RGBA color of the text
@@ -112,9 +110,7 @@ def create_text_marker(
     """
     marker = Marker()
     marker.header.frame_id = frame_id
-    if type(time_stamp) is not rospy.Time:
-        time_stamp = rospy.Time.from_sec(time_stamp)
-    marker.header.stamp = time_stamp
+    marker.header.stamp = timestamp or rospy.Time.now()
     marker.ns = namespace
     marker.id = marker_id
     marker.type = Marker.TEXT_VIEW_FACING

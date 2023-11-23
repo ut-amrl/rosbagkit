@@ -7,7 +7,7 @@ def get_parser():
     parser.add_argument(
         "--input",
         type=str,
-        default="/home/dongmyeong/Projects/AMRL/CODa/correction/map/0_4.pcd",
+        default="/home/dongmyeong/Projects/AMRL/CODa/correction/map_0_4.pcd",
         help="input point cloud",
     )
     parser.add_argument(
