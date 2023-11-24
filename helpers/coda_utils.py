@@ -2,7 +2,7 @@ import yaml
 import numpy as np
 
 from typing import Tuple, Dict
-from scipy.spatial.transform import Rotation
+from scipy.spatial.transform import Rotation as R
 
 
 def load_extrinsic_matrix(extrinsic_file: str) -> np.ndarray:
@@ -77,7 +77,7 @@ def load_keyframe_pose(keyframe_pose_file: str) -> np.ndarray:
         keyframe_pose_matrix = np.array(
             [list(map(float, line.split())) for line in pose_lines]
         )
-        r = Rotation.from_matrix(keyframe_pose_matrix[:3, :3])
+        r = R.from_matrix(keyframe_pose_matrix[:3, :3])
 
         # estimated pose (timestamp, x, y, z, qw, qx, qy, qz)
         keyframe_pose = np.zeros(8)

@@ -100,7 +100,7 @@ void buildInterpolationOptimizationProblem(const MapOfPoses3d<T>& kf_poses,
 
     // Set the information matrix for the relative pose.
     relative_pose.sqrt_information = Eigen::Matrix<T, 6, 6>::Zero();
-    relative_pose.sqrt_information.diagonal() << 10, 10, 10, 5, 5, 5;
+    relative_pose.sqrt_information.diagonal() << 1, 1, 1, 0.5, 0.5, 0.5;
 
     relative_poses.push_back(relative_pose);
   }
@@ -173,9 +173,6 @@ bool outInterpolatedPoses(const std::string& filename,
     return false;
   }
 
-  std::ios init(NULL);
-  init.copyfmt(outfile);
-
   for (const auto& [timestamp, pose] : poses) {
     outfile << std::fixed << std::setprecision(6) << timestamp << " " << pose << '\n';
   }
@@ -195,15 +192,18 @@ int main(int argc, char** argv) {
       FLAGS_dataset_path + "/poses/keyframe/" + std::to_string(FLAGS_seq) + ".txt";
   std::string input_odom =
       FLAGS_dataset_path + "/poses/dense/" + std::to_string(FLAGS_seq) + ".txt";
+  LOG(INFO) << "Interpolate sequence " << FLAGS_seq;
+  LOG(INFO) << "Keyframe : " << input_kf;
+  LOG(INFO) << "Odometry : " << input_odom;
 
   // Read the keyframe and odometry poses.
   ut_amrl::slam::MapOfPoses3d<double> kf_poses;
   CHECK(ut_amrl::slam::readPoseFile(input_kf, &kf_poses));
-  std::cout << "Number of keyframe poses: " << kf_poses.size() << std::endl;
+  LOG(INFO) << "Number of keyframe poses: " << kf_poses.size();
 
   ut_amrl::slam::MapOfPoses3d<double> odom_poses;
   CHECK(ut_amrl::slam::readPoseFile(input_odom, &odom_poses));
-  std::cout << "Number of odometry poses: " << odom_poses.size() << std::endl;
+  LOG(INFO) << "Number of odometry poses: " << odom_poses.size();
 
   // Interpolate the keyframe poses with odometry poses using pose graph optimization
   ut_amrl::slam::MapOfPoses3d<double> interpolated_poses;

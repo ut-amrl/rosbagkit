@@ -12,6 +12,7 @@ from typing import Tuple, List
 
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+from scipy.spatial import KDTree
 from sklearn.cluster import DBSCAN
 
 import rospy
@@ -32,9 +33,14 @@ from helpers.msg_converter import (
     tf_msg_from_quat,
 )
 from helpers.geometry import transform_bbox_3d
-from helpers.ros_viz_utils import create_bbox_3d_marker, clear_marker_array
+from helpers.ros_viz_utils import (
+    create_bbox_3d_marker,
+    create_filled_bbox_3d_marker,
+    clear_marker_array,
+)
 from helpers.ros_utils import wait_for_subscribers
 from helpers.math_utils import average_rpy
+from helpers.coda_utils import load_extrinsic_matrix, load_camera_params
 
 # Frames
 global_frame = "map"
@@ -93,9 +99,33 @@ def get_parser():
     return parser
 
 
+def get_2d_bboxes(
+    bboxes_3d: np.ndarray,
+    cam_extrinsics: np.ndarray,
+    cam_intrinsics: np.ndarray,
+    image_size: Tuple[int, int],
+) -> np.ndarray:
+    """
+    Get 2D Bounding Box from 3D Bounding Box
+
+    Args:
+        bbox_3d: (N, 9) 3D Bounding Box in LiDAR Frame (cx, cy, cz, h, l, w, r, p, y)
+        cam_extrinsics: (4, 4) Camera Extrinsic Matrix (LiDAR Frame -> Camera Frame)
+        cam_intrinsics: (3, 3) Camera Intrinsic Matrix (Camera Frame -> Image Frame)
+        image_size: (width, height) Image Size
+    Returns:
+    """
+    assert bboxes_3d.shape[1] == 9, "Invalid 3D Bounding Box Shape"
+    assert cam_extrinsics.shape == (4, 4), "Invalid Camera Extrinsic Matrix Shape"
+    assert cam_intrinsics.shape == (3, 3), "Invalid Camera Intrinsic Matrix Shape"
+    assert len(image_size) == 2, "Invalid Image Size"
+    pass
+
+
+
 def main(args):
     rospy.set_param("use_sim_time", True)
-    rospy.init_node("CODa_global_3d_bbox_getter", anonymous=True)
+    rospy.init_node("CODa_instance_2d_bbox_getter", anonymous=True)
 
     # Data Publishers
     clock_pub = rospy.Publisher("/clock", Clock, queue_size=10)
@@ -121,22 +151,29 @@ def main(args):
         )
         for class_name in classes
     }
+    query_object_pubs = {
+        class_name: rospy.Publisher(
+            f"queried_3dbbox/{class_name}", MarkerArray, queue_size=1
+        )
+        for class_name in classes
+    }
 
     # Wait for Subscribers
-    wait_for_subscribers([*object_pubs.values()])
+    wait_for_subscribers([*object_pubs.values(), *query_object_pubs.values()])
 
     # Data Path
     dataset_path = pathlib.Path(args.dataset)
 
-    # Publish 3D Bounding Box
+    # Process Global 3D Bounding Box
+    bboxes_3d = {class_name: [] for class_name in classes}
     for class_name in classes:
         bbox_3d_file = dataset_path / "3d_bbox" / "global" / f"{class_name}.json"
         if not os.path.exists(bbox_3d_file):
             continue
 
-        bbox_3d_json = json.load(open(bbox_3d_file, "r"))
-
         marker_array = MarkerArray()
+
+        bbox_3d_json = json.load(open(bbox_3d_file, "r"))
         for idx, bbox_3d in enumerate(bbox_3d_json["3dbbox"]):
             # fmt: off
             bbox = np.array([
@@ -153,101 +190,115 @@ def main(args):
                 color=classes[class_name]["color"],
             )
             marker_array.markers.append(bbox_marker)
+            # Save 3D Bounding Box
+            bboxes_3d[class_name].append((bbox_3d["instanceId"], bbox))
 
+        # Publish Global 3D Bounding Box
         clear_marker_array(object_pubs[class_name])
         object_pubs[class_name].publish(marker_array)
 
+    # Build KDTree for each class with 3D Bounding Box Centroids
+    bboxes_kdtree = {
+        class_name: KDTree(np.array([bbox[:3] for _, bbox in bboxes_3d[class_name]]))
+        for class_name in classes
+    }
+
     # Main Loop
-    for sequence in args.sequences:
-        pose_file = dataset_path / "poses" / "correct" / f"{sequence}.txt"
+    for seq in args.sequences:
+        pose_file = dataset_path / "poses" / "correct" / f"{seq}.txt"
         pose_np = np.loadtxt(pose_file, delimiter=" ").reshape(-1, 8)
 
-        timestamp_file = dataset_path / "timestamps" / f"{sequence}.txt"
+        timestamp_file = dataset_path / "timestamps" / f"{seq}.txt"
         timestamp_np = np.loadtxt(timestamp_file, delimiter=" ")
 
-        # Data Path
-        pc_root_dir = dataset_path / "3d_comp" / "os1" / str(sequence)
+        # Data Path for sequence
+        pc_root_dir = dataset_path / "3d_comp" / "os1" / str(seq)
         img_root_dirs = {
-            cam: dataset_path / "2d_rect" / cam / str(sequence) for cam in cam_list
+            cam: dataset_path / "2d_rect" / cam / str(seq) for cam in cam_list
         }
-        bbox_3d_root_dir = dataset_path / "3d_bbox" / "os1" / str(sequence)
+
+        # Calibration Params
+        calib_dir = dataset_path / "calibrations" / str(seq)
+        os1_to_cam_extrinsic = {
+            cam: load_extrinsic_matrix(calib_dir / f"calib_os1_to_{cam}.yaml")
+            for cam in cam_list
+        }
+        cam_intrinsics = {
+            cam: load_camera_params(calib_dir / f"calib_{cam}_intrinsics.yaml")
+            for cam in cam_list
+        }
 
         # Main Loop
         for pose in tqdm(pose_np, total=len(pose_np)):
             # Get Pose
             frame = np.searchsorted(timestamp_np, pose[0], side="left")
-            # ts = rospy.Time.from_sec(pose[0])
+            ts = rospy.Time.from_sec(pose[0])
 
-            # # Publish Clock
-            # clock_pub.publish(ts)
+            # Publish Clock
+            clock_pub.publish(ts)
 
-            # # Publish LiDAR Odometry and Path
-            # odom_msg = odometry_from_xyz_quat(
-            # pose[1:4], pose[4:], global_frame, lidar_frame, ts
-            # )
-            # odom_pub.publish(odom_msg)
+            # Publish LiDAR Odometry and Path
+            odom_msg = odometry_from_xyz_quat(
+                pose[1:4], pose[4:], global_frame, lidar_frame, ts
+            )
+            odom_pub.publish(odom_msg)
 
-            # pose_msg = pose_stamped_from_xyz_quat(pose[1:4], pose[4:], global_frame, ts)
-            # global_path.poses.append(pose_msg)
-            # path_pub.publish(global_path)
+            pose_msg = pose_stamped_from_xyz_quat(pose[1:4], pose[4:], global_frame, ts)
+            global_path.poses.append(pose_msg)
+            path_pub.publish(global_path)
 
-            # # Publish TF
-            # tf_msg = tf_msg_from_quat(
-            # pose[1:4], pose[4:], global_frame, lidar_frame, ts
-            # )
-            # tf_broadcaster.sendTransform(tf_msg)
+            # Publish TF
+            tf_msg = tf_msg_from_quat(
+                pose[1:4], pose[4:], global_frame, lidar_frame, ts
+            )
+            tf_broadcaster.sendTransform(tf_msg)
 
-            # # Data Path
-            # pc_file = pc_root_dir / f"3d_comp_os1_{sequence}_{frame}.bin"
-            # img_files = {
-            # cam: img_root_dirs[cam] / f"2d_rect_{cam}_{sequence}_{frame}.jpg"
-            # for cam in cam_list
-            # }
-            bbox_3d_file = bbox_3d_root_dir / f"3d_bbox_os1_{sequence}_{frame}.json"
+            # Data Path for frame
+            pc_file = pc_root_dir / f"3d_comp_os1_{seq}_{frame}.bin"
+            img_files = {
+                cam: img_root_dirs[cam] / f"2d_rect_{cam}_{seq}_{frame}.jpg"
+                for cam in cam_list
+            }
 
-            if not os.path.exists(bbox_3d_file):
-                continue
+            # Publish Pointcloud
+            pc_np = np.fromfile(pc_file, dtype=np.float32).reshape(-1, 4)
+            pc_msg = np_to_pointcloud2(pc_np, "x y z intensity", lidar_frame, ts)
+            pc_pub.publish(pc_msg)
 
-            # # Publish Pointcloud
-            # pc_np = np.fromfile(pc_file, dtype=np.float32).reshape(-1, 4)
-            # pc_msg = np_to_pointcloud2(pc_np, "x y z intensity", lidar_frame, ts)
-            # pc_pub.publish(pc_msg)
+            # Publish Images 
+            for cam in cam_list:
+                img = cv2.imread(str(img_files[cam]))
+                img_msg = CvBridge().cv2_to_imgmsg(img, "bgr8")
+                img_pubs[cam].publish(img_msg)
 
-            # # Publish Images
-            # for cam in cam_list:
-            # img = cv2.imread(str(img_files[cam]))
-            # img_msg = CvBridge().cv2_to_imgmsg(img, "bgr8")
-            # img_pubs[cam].publish(img_msg)
+            # Query 3D Bounding Box
+            queried_indices = {}
+            for class_name in classes:
+                indices = bboxes_kdtree[class_name].query_ball_point(pose[1:4], r=20.0)
+                queried_indices[class_name] = indices
 
-            # Transformation Matrix from Global to LiDAR
-            H_lg = np.eye(4)
-            H_lg[:3, :3] = R.from_quat(pose[[5, 6, 7, 4]]).as_matrix()
-            H_lg[:3, 3] = pose[1:4]
+                # Get Queried 3D Bounding Box
+                marker_array = MarkerArray()
+                for idx in indices:
+                    instance_id, bbox = bboxes_3d[class_name][idx]
+                    bbox_marker = create_filled_bbox_3d_marker(
+                        bbox_3d=bbox,
+                        frame_id=global_frame,
+                        marker_id=int(instance_id.split("_")[-1]),
+                        namespace=instance_id,
+                        color=classes[class_name]["color"],
+                    )
+                    marker_array.markers.append(bbox_marker)
 
-            # # Get Averaged Bbox
-            # averaged_bboxes = {
-            # class_name: cluster_average_bbox_3d(bboxes[class_name])
-            # for class_name in classes
-            # }
+                # Publish Queried 3D Bounding Box
+                clear_marker_array(query_object_pubs[class_name])
+                query_object_pubs[class_name].publish(marker_array)
 
-            # # Publish 3D Bounding Box
-            # for class_name in classes:
-            # marker_array = MarkerArray()
-            # for idx, bbox in enumerate(averaged_bboxes[class_name]):
-            # bbox_marker = create_bbox_3d_marker(
-            # bbox,
-            # global_frame,
-            # ts,
-            # idx,
-            # color=classes[class_name]["color"],
-            # )
-            # marker_array.markers.append(bbox_marker)
-            # clear_marker_array(object_pubs[class_name])
-            # object_pubs[class_name].publish(marker_array)
+            # Project 3D Bounding Box to 2D Bounding Box
 
-            # # Wait for next frame
-            # if args.rate > 0:
-            # time.sleep(1 / args.rate)
+            # Wait for next frame
+            if args.rate > 0:
+                time.sleep(1 / args.rate)
 
     rospy.spin()
 

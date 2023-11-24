@@ -96,7 +96,7 @@ def cluster_average_bbox_3d(bboxes: np.ndarray, threshold: float = 1.0) -> np.nd
         cluster_bboxes = bboxes[labels == label]
 
         # Skip if there is only one bbox
-        if len(cluster_bboxes) < 2:
+        if len(cluster_bboxes) < 3:
             continue
 
         avg_centroid_dim = np.mean(cluster_bboxes[:, :6], axis=0)
