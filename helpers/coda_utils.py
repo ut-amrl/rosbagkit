@@ -52,7 +52,7 @@ def load_camera_params(intrinsic_file: str) -> Dict[str, np.ndarray]:
         )
         image_size = np.array([params["image_width"], params["image_height"]])
         distortion_coeffs = np.array(params["distortion_coefficients"]["data"])
-    return {"K": intrinsic_matrix, "image_size": image_size, "D": distortion_coeffs}
+    return {"K": intrinsic_matrix, "img_size": image_size, "D": distortion_coeffs}
 
 
 def load_keyframe_pose(keyframe_pose_file: str) -> np.ndarray:

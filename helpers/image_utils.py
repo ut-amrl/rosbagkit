@@ -4,31 +4,14 @@ Date:        September 23, 2023
 Description: A collection of image utility functions.
 """
 import os
-from typing import Tuple, Optional
+from typing import Optional
 
 import numpy as np
 import cv2
 
-from helpers.geometry import line_segment_intersection_2d
-
-
-def compute_bbox_area(bbox: Tuple[int, int, int, int]) -> int:
-    """
-    Compute the area of a bounding box.
-
-    Args:
-        bbox: A tuple of (x1, y1, x2, y2) representing
-              the top-left and bottom-right of the bbox.
-
-    Returns:
-        The area of the bounding box.
-    """
-    x1, y1, x2, y2 = bbox
-    return (x2 - x1) * (y2 - y1)
-
 
 def compute_overlap(
-    bbox1: Tuple[int, int, int, int], bbox2: Tuple[int, int, int, int]
+    bbox1: tuple[int, int, int, int], bbox2: tuple[int, int, int, int]
 ) -> int:
     """
     Compute the overlapping area of two bounding boxes.
@@ -52,7 +35,7 @@ def compute_overlap(
 
 
 def compute_iou(
-    bbox1: Tuple[int, int, int, int], bbox2: Tuple[int, int, int, int]
+    bbox1: tuple[int, int, int, int], bbox2: tuple[int, int, int, int]
 ) -> float:
     """
     Compute the intersection over union (IoU) of two bounding boxes.
@@ -76,52 +59,75 @@ def compute_iou(
     return overlap_area / (bbox1_area + bbox2_area - overlap_area)
 
 
-def clip_line_with_image_size(
-    p1: Tuple[int, int], p2: Tuple[int, int], image_size: Tuple[int, int]
-) -> Tuple[Optional[Tuple[int, int]], Optional[Tuple[int, int]]]:
+def ratio_within_image(
+    bbox: tuple[int, int, int, int], image_size: tuple[int, int]
+) -> float:
     """
-    Clip a line with the image size.
+    Compute the ratio of the bbox within the image.
 
     Args:
-        p1: A tuple of (x, y) representing the first point.
-        p2: A tuple of (x, y) representing the second point.
+        bbox: A tuple of (x1, y1, x2, y2) representing
+              the top-left and bottom-right of the bbox.
         image_size: A tuple of (width, height) representing the image size.
 
     Returns:
-        A tuple of points (x, y) representing the clipped line.
+        The ratio of the bbox within the image.
     """
-    x1, y1 = p1
-    x2, y2 = p2
-    width, height = image_size
+    x1, y1, x2, y2 = map(float, bbox)
+    width, height = map(float, image_size)
 
-    is_p1_inside = x1 >= 0 and x1 < width and y1 >= 0 and y1 < height
-    is_p2_inside = x2 >= 0 and x2 < width and y2 >= 0 and y2 < height
+    overlap_area = compute_overlap(bbox, (0, 0, width, height))
+    bbox_area = (x2 - x1) * (y2 - y1)
 
-    if is_p1_inside and is_p2_inside:
-        return p1, p2
+    return overlap_area / bbox_area if not np.isclose(bbox_area, 0) else 0
 
-    if not is_p1_inside and not is_p2_inside:
-        return (None, None)
 
-    boundaries = [
-        ((0, 0), (width, 0)),
-        ((width, 0), (width, height)),
-        ((width, height), (0, height)),
-        ((0, height), (0, 0)),
-    ]
+# def clip_line_with_image_size(
+# p1: tuple[int, int], p2: tuple[int, int], image_size: tuple[int, int]
+# ) -> tuple[Optional[tuple[int, int]], Optional[tuple[int, int]]]:
+# """
+# Clip a line with the image size.
 
-    for boundary in boundaries:
-        point = line_segment_intersection_2d(p1, p2, boundary[0], boundary[1])
+# Args:
+# p1: A tuple of (x, y) representing the first point.
+# p2: A tuple of (x, y) representing the second point.
+# image_size: A tuple of (width, height) representing the image size.
 
-        if point[0] is not None and point[1] is not None:
-            return (p1, point) if is_p1_inside else (point, p2)
+# Returns:
+# A tuple of points (x, y) representing the clipped line.
+# """
+# x1, y1 = p1
+# x2, y2 = p2
+# width, height = image_size
 
-    return (None, None)
+# is_p1_inside = x1 >= 0 and x1 < width and y1 >= 0 and y1 < height
+# is_p2_inside = x2 >= 0 and x2 < width and y2 >= 0 and y2 < height
+
+# if is_p1_inside and is_p2_inside:
+# return p1, p2
+
+# if not is_p1_inside and not is_p2_inside:
+# return (None, None)
+
+# boundaries = [
+# ((0, 0), (width, 0)),
+# ((width, 0), (width, height)),
+# ((width, height), (0, height)),
+# ((0, height), (0, 0)),
+# ]
+
+# for boundary in boundaries:
+# point = line_segment_intersection_2d(p1, p2, boundary[0], boundary[1])
+
+# if point[0] is not None and point[1] is not None:
+# return (p1, point) if is_p1_inside else (point, p2)
+
+# return (None, None)
 
 
 def crop_2d_bbox(
-    bbox: Tuple[int, int, int, int], image_size: Tuple[int, int]
-) -> Tuple[Tuple[int, int, int, int], float]:
+    bbox: tuple[int, int, int, int], image_size: tuple[int, int]
+) -> tuple[tuple[int, int, int, int], float]:
     """
     Crop a 2D bounding box with the image boundary.
 
@@ -143,8 +149,8 @@ def crop_2d_bbox(
     valid_y2 = np.clip(y2, 0, height)
     valid_bbox = (valid_x1, valid_y1, valid_x2, valid_y2)
 
-    bbox_area = compute_bbox_area(bbox)
-    valid_bbox_area = compute_bbox_area(valid_bbox)
+    bbox_area = (x2 - x1) * (y2 - y1)
+    valid_bbox_area = (valid_x2 - valid_x1) * (valid_y2 - valid_y1)
     cropped_area = bbox_area - valid_bbox_area
     cropped_ratio = np.clip(cropped_area / bbox_area, 0, 1)
 
@@ -153,8 +159,8 @@ def crop_2d_bbox(
 
 def save_cropped_image_with_margin(
     image: np.ndarray,
-    bbox: Tuple[int, int, int, int],
-    target_size: Tuple[int, int],
+    bbox: tuple[int, int, int, int],
+    target_size: tuple[int, int],
     margin_ratio: float,
     output_file: str,
 ) -> np.ndarray:

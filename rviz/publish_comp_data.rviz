@@ -6,6 +6,7 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
+        - /PointCloud21
         - /PointCloud21/Status1
       Splitter Ratio: 0.5
     Tree Height: 631
@@ -80,7 +81,7 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
-    - Alpha: 0.05000000074505806
+    - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
         Max Value: 25.75538444519043
@@ -207,7 +208,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 119.70831298828125
+      Distance: 96.91809844970703
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -215,17 +216,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: -88.9986572265625
-        Y: 106.5141830444336
-        Z: 29.39525604248047
+        X: -60.05320358276367
+        Y: 84.29051971435547
+        Z: 28.89995574951172
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.1897969245910645
+      Pitch: 1.0697970390319824
       Target Frame: <Fixed Frame>
-      Yaw: 4.9354329109191895
+      Yaw: 4.625430583953857
     Saved: ~
 Window Geometry:
   Displays:

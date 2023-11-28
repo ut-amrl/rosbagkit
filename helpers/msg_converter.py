@@ -3,7 +3,7 @@ Author:      Dongmyeong Lee (domlee[at]utexas.edu)
 Date:        September 16, 2023
 Description: A collection of functions to convert data to ROS messages
 """
-from typing import Optional, Tuple, Literal
+from typing import Optional, Literal
 import rospy
 import numpy as np
 from scipy.spatial.transform import Rotation as R
@@ -259,7 +259,7 @@ def odometry_from_xyz_quat(
     position: np.ndarray,
     quaternion: np.ndarray,
     frame_id: str = "map",
-    child_frame_id: str = "base_link",
+    child_frame_id: Optional[str] = None,
     time_stamp: Optional[rospy.Time] = None,
     quat_order: Literal["xyzw", "wxyz"] = "wxyz",
 ) -> Odometry:
@@ -286,7 +286,8 @@ def odometry_from_xyz_quat(
     odom_msg.header.frame_id = frame_id
     odom_msg.header.stamp = time_stamp or rospy.Time.now()
 
-    odom_msg.child_frame_id = child_frame_id
+    if child_frame_id is not None:
+        odom_msg.child_frame_id = child_frame_id
 
     odom_msg.pose.pose.position.x = position[0]
     odom_msg.pose.pose.position.y = position[1]

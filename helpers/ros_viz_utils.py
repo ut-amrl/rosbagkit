@@ -33,7 +33,8 @@ def create_bbox_3d_marker(
     timestamp: rospy.Time = None,
     marker_id: int = 0,
     namespace: str = "",
-    color: Tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
+    color: Tuple[float, float, float] = (1.0, 1.0, 1.0),
+    alpha: float = 1.0,
     scale: float = 0.1,
 ) -> Marker:
     """
@@ -60,10 +61,14 @@ def create_bbox_3d_marker(
     marker.type = Marker.LINE_LIST
     marker.action = Marker.ADD
 
+    # Normalize color
+    if any(c > 1 for c in color):
+        color = tuple(c / 255.0 for c in color)
+
     marker.color.r = color[0]
     marker.color.g = color[1]
     marker.color.b = color[2]
-    marker.color.a = color[3] if len(color) == 4 else 1.0
+    marker.color.a = alpha
     marker.scale.x = scale
 
     marker.pose.orientation.w = 1.0
@@ -87,7 +92,8 @@ def create_filled_bbox_3d_marker(
     timestamp: rospy.Time = None,
     marker_id: int = 0,
     namespace: str = "",
-    color: Tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
+    color: Tuple[float, float, float] = (1.0, 1.0, 1.0),
+    alpha: float = 1.0
 ) -> Marker:
     """
     Create a 3D bounding box marker
@@ -98,7 +104,8 @@ def create_filled_bbox_3d_marker(
         timestamp: timestamp of header msgs
         namespace: namespace of the bounding box
         marker_id: id of the bounding box
-        color: RGBA or RGB color of the bounding box
+        color: RGB color of the text
+        alpha: alpha of the text (0 ~ 1)
 
     Returns:
         marker: a 3D bounding box marker
@@ -112,10 +119,14 @@ def create_filled_bbox_3d_marker(
     marker.type = Marker.CUBE
     marker.action = Marker.ADD
 
+    # Normalize color
+    if any(c > 1 for c in color):
+        color = tuple(c / 255.0 for c in color)
+
     marker.color.r = color[0]
     marker.color.g = color[1]
     marker.color.b = color[2]
-    marker.color.a = color[3] if len(color) == 4 else 1.0
+    marker.color.a = alpha
     
     marker.pose.position.x = bbox_3d[0]
     marker.pose.position.y = bbox_3d[1]
@@ -141,7 +152,8 @@ def create_text_marker(
     timestamp: rospy.Time = None,
     namespace: str = "",
     marker_id: int = 0,
-    color: Tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
+    color: Tuple[float, float, float] = (1.0, 1.0, 1.0),
+    alpha: float = 1.0,
     scale: float = 1.0,
 ) -> Marker:
     """
@@ -154,7 +166,8 @@ def create_text_marker(
         timestamp: timestamp of header msgs
         namespace: namespace of the text
         marker_id: id of the text
-        color: RGBA color of the text
+        color: RGB color of the text
+        alpha: alpha of the text (0 ~ 1)
         scale: scale of the text (0 ~ 1)
 
     Returns:
@@ -172,10 +185,14 @@ def create_text_marker(
     marker.pose.position.y = coords[1]
     marker.pose.position.z = coords[2]
 
+    # Normalize color
+    if any(c > 1 for c in color):
+        color = tuple(c / 255.0 for c in color)
+
     marker.color.r = color[0]
     marker.color.g = color[1]
     marker.color.b = color[2]
-    marker.color.a = color[3]
+    marker.color.a = alpha
     marker.scale.z = scale
 
     return marker

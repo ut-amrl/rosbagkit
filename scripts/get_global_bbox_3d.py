@@ -62,7 +62,7 @@ def get_parser():
         "--sequences",
         nargs="+",
         type=int,
-        default=[0],
+        default=[2, 7, 12, 16, 17, 21],
         help="Sequence ID",
     )
     return parser

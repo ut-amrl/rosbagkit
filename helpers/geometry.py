@@ -1,15 +1,17 @@
 """
 Author:      Dongmyeong Lee (domlee[at]utexas.edu)
-Date:        September 16, 2023
+Date:        Sep 16, 2023
 Description: functions for geometric operations.
 """
 import numpy as np
 import cv2
 from scipy.spatial.transform import Rotation as R
-from typing import Optional, Tuple
+from typing import Optional
+
+from helpers.image_utils import compute_iou
 
 
-def get_corners_bbox_3d(bbox_3d: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def get_corners_bbox_3d(bbox_3d: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """
     Get corners of the 3D bounding box in the local frame. The local frame is
     defined as the frame with the origin at the center of the bounding box and
@@ -17,9 +19,9 @@ def get_corners_bbox_3d(bbox_3d: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
 
     The 3D bounding box is defined as follows:
 
-             l
+            w
        0 -------- 2
-    w /|         /|                      z up   x front
+    l /|         /|                      z up   x front
      / |        / |                       ^      ^
     4 -------- 6  | h                     |     /
     |  |       |  |                       |    /
@@ -30,17 +32,17 @@ def get_corners_bbox_3d(bbox_3d: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     5 -------- 7       y left <-----------O
 
     Args:
-        bbox_3d: (9, ) array of [cX, cY, cZ, h, l, w, roll, pitch, yaw]
+        bbox_3d: (9, ) array of [cX, cY, cZ, h, l, w, r, p, y]
 
     Returns:
         corners: (8, 3) array of 3D points
         edges: (12, 2) array of edges (corner1_idx, corner2_idx)
     """
     assert bbox_3d.shape == (9,), "Invalid shape of bbox_3d"
-    cX, cY, cZ, h, l, w, roll, pitch, yaw = bbox_3d
+    cX, cY, cZ, h, l, w, r, p, y = bbox_3d
 
-    # Create transformation matrix from the given roll, pitch, yaw
-    rot_mat = R.from_euler("xyz", [roll, pitch, yaw], degrees=False).as_matrix()
+    # Create transformation matrix from the given r, p, y
+    rot_mat = R.from_euler("xyz", [r, p, y], degrees=False).as_matrix()
 
     # Half-length, half-width, and half-height
     hh, hl, hw = h / 2.0, l / 2.0, w / 2.0
@@ -70,88 +72,29 @@ def transform_bbox_3d(bbox_3d: np.ndarray, transformation: np.ndarray) -> np.nda
              transformation should be LiDAR to map transformation matrix
 
     Args:
-        bbox_3d: (9, ) array of [cX, cY, cZ, h, l, w, roll, pitch, yaw]
+        bbox_3d: (9, ) array of [cX, cY, cZ, h, l, w, r, p, y]
         transformation: (4, 4) transformation matrix
 
     Returns:
-        transformed_bbox_3d: (9, ) array of [cX, cY, cZ, h, l, w, roll, pitch, yaw]
+        transformed_bbox_3d: (9, ) array of [cX, cY, cZ, h, l, w, r, p, y]
     """
     assert bbox_3d.shape == (9,), "Invalid shape of bbox_3d"
     assert transformation.shape == (4, 4), "Invalid shape of transformation"
+    cX, cY, cZ, h, l, w, r, p, y = bbox_3d
 
     bbox_frame = np.eye(4)
-    bbox_frame[:3, 3] = np.array(bbox_3d[:3])
-    bbox_frame[:3, :3] = R.from_euler("xyz", bbox_3d[6:9], degrees=False).as_matrix()
+    bbox_frame[:3, 3] = np.array([cX, cY, cZ])
+    bbox_frame[:3, :3] = R.from_euler("xyz", [r, p, y], degrees=False).as_matrix()
 
     transformed_bbox_frame = transformation @ bbox_frame
 
     transformed_bbox_3d = np.zeros(9)
     transformed_bbox_3d[:3] = transformed_bbox_frame[:3, 3]
-    transformed_bbox_3d[3:6] = bbox_3d[3:6]
+    transformed_bbox_3d[3:6] = np.array([h, l, w])
     transformed_bbox_3d[6:9] = R.from_matrix(transformed_bbox_frame[:3, :3]).as_euler(
         "xyz", degrees=False
     )
     return transformed_bbox_3d
-
-
-def project_bbox_3d_to_2d(
-    bbox_3d: np.ndarray,
-    extrinsic: np.ndarray,
-    intrinsic: np.ndarray,
-    image_size: np.ndarray,
-    dist_coeff: Optional[np.ndarray] = None,
-) -> Tuple[Bbox2D, float]:
-    """
-    Project 3D bounding box onto the image plane. If the bounding box is
-    behind the camera, compute the intersection of the bounding box with the
-    camera x-y plane and project the intersection points onto the image plane.
-
-    Args:
-        bbox_3d: (9, ) array of [cX, cY, cZ, h, l, w, roll, pitch, yaw]
-        extrinsic: (4, 4) extrinsic matrix
-        intrinsic: (3, 3) intrinsic matrix
-        image_size: (2, ) image size (width, height) in pixels
-        dist_coeff: (5, ) dist_coeff coefficients (k1, k2, p1, p2, k3)
-
-    Returns:
-        x1, y1, x2, y2: coordinates of the bounding box (in pixels)
-        occlusion_ratio: cropped ratio of 2d bbox by image boundary
-    """
-    # Get corners of the bounding box in the LiDAR coordinate system
-    corners, edges = get_corners_3d_bbox(*bbox_3d)
-
-    # Transform corners to the camera coordinate system
-    corners_homo = np.column_stack((corners, np.ones(corners.shape[0])))
-    corners_camera = corners_homo @ extrinsic[:3, :].T
-
-    # Intersect the bounding box with the camera x-y plane
-    intersection_points = []
-    for edge in edges:
-        p1, p2 = corners_camera[edge]
-        # 
-        if p1[2] * p1[2] < 0:
-
-
-
-    # Project corners on image
-    corners_image, _ = project_points_3d_to_2d(
-        corners, extrinsic, intrinsic, None, dist_coeff, keep_size=True
-    )
-
-    # Corner Validity
-    corners_validity = np.logical_not(np.isnan(corners_image[:, 0]))
-
-    # When all corners are behind the camera, corners_image is empty
-    if np.count_nonzero(corners_validity) == 0:
-        return (None, None, None, None), 1.0
-
-    # when all corners are availble to project
-    if np.count_nonzero(corners_validity) == 8:
-        x1 = int(corners_image[:, 0].min())
-        y1 = int(corners_image[:, 1].min())
-        x2 = int(corners_image[:, 0].max())
-        y2 = int(corners_image[:, 1].max())
-    return (x1, y1, x2, y2), 0.0
 
 
 def project_points_3d_to_2d(
@@ -161,7 +104,7 @@ def project_points_3d_to_2d(
     image_size: Optional[np.ndarray] = None,
     dist_coeff: Optional[np.ndarray] = None,
     keep_size: bool = False,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Project 3D points onto the image plane and filter out points that are
     outside the image boundaries.
@@ -176,47 +119,143 @@ def project_points_3d_to_2d(
         keep_size: whether to keep the size of points array
 
     Returns:
-        image_points: (M, 2) array of 2D points
+        points_image: (M, 2) array of 2D points
         depths: (M, ) array of depths
         where M <= N is the number of points that are projected onto the image
         M == N if keep_size (NaN is used to replace non-projectable points)
     """
-    assert points.ndim == 2 and points.shape[1] == 3, "Invalid shape of points"
+    assert points.ndim == 2 and points.shape[1] >= 3, "Invalid shape of points"
 
     if points.shape[0] < 1:
         return np.empty((0, 2)), np.empty((0,))
 
     # Transform points to the camera coordinate system
-    points_homo = np.column_stack((points, np.ones(points.shape[0])))
-    camera_points = points_homo @ extrinsic[:3, :].T
-    depths = camera_points[:, 2]
+    points_homo = np.column_stack((points[:, :3], np.ones(points.shape[0])))
+    points_camera = points_homo @ extrinsic[:3, :].T
+    depths = points_camera[:, 2]
 
     # Filter out points with negative depth
     mask_visible = depths > 0
+    points_camera = points_camera[mask_visible]
+    depths = depths[mask_visible]
 
     # Project Points
-    image_points, _ = cv2.projectPoints(
-        camera_points[mask_visible], np.zeros(3), np.zeros(3), intrinsic, dist_coeff
-    )
-    image_points = image_points.squeeze().reshape(-1, 2)
+    points_image = points_camera @ intrinsic.T
+    points_image = points_image / points_image[:, 2].reshape(-1, 1)
+
+    # TODO: handle distortion (if dist_coeff is provided)
 
     # Filter points within the image boundaries
     if image_size is not None:
         mask_in_image = (
-            (image_points[:, 0] >= 0)
-            & (image_points[:, 0] < image_size[0])
-            & (image_points[:, 1] >= 0)
-            & (image_points[:, 1] < image_size[1])
+            (points_image[:, 0] >= 0)
+            & (points_image[:, 0] < image_size[0])
+            & (points_image[:, 1] >= 0)
+            & (points_image[:, 1] < image_size[1])
         )
-        image_points = image_points[mask_in_image]
-        depths = depths[mask_visible][mask_in_image]
         mask_visible[mask_visible] = mask_in_image
+        points_image = points_image[mask_in_image]
+        depths = depths[mask_in_image]
 
     if keep_size:
         resized_points = np.full((points.shape[0], 2), np.nan)
         resized_depths = np.full(points.shape[0], np.nan)
-        resized_points[mask_visible] = image_points
+        resized_points[mask_visible] = points_image
         resized_depths[mask_visible] = depths
         return resized_points, resized_depths
 
-    return image_points, depths
+    return points_image, depths
+
+
+def project_bbox_3d_to_2d(
+    bbox_3d: np.ndarray,
+    extrinsic: np.ndarray,
+    intrinsic: np.ndarray,
+    image_size: Optional[np.ndarray] = None,
+    dist_coeff: Optional[np.ndarray] = None,
+) -> Optional[np.ndarray]:
+    """
+    Project 3D bounding box onto the image plane. If the bounding box is
+    behind the camera, compute the intersection of the bounding box with the
+    camera x-y plane and project the intersection points onto the image plane.
+
+    Args:
+        bbox_3d: (9,) array of [cX, cY, cZ, h, l, w, r, p, y]
+        extrinsic: (4, 4) extrinsic matrix
+        intrinsic: (3, 3) intrinsic matrix
+        image_size: (2,) image size (width, height) in pixels (optional)
+        dist_coeff: (5,) dist_coeff coefficients (k1, k2, p1, p2, k3) (optional)
+
+    Returns:
+        x1, y1, x2, y2: (4,) coordinates of the bounding box (in pixels)
+    """
+    # Get corners of the bounding box in the local frame (e.g., LiDAR frame)
+    corners, edges = get_corners_bbox_3d(bbox_3d)
+
+    # Transform corners to the camera coordinate system
+    corners_homo = np.column_stack((corners, np.ones(corners.shape[0])))
+    corners_camera = corners_homo @ extrinsic[:3, :].T
+
+    # Check if all corners are behind the camera
+    if np.all(corners_camera[:, 2] < 0):
+        return None
+
+    # TODO: Handle edge case (part of bbox_3d are behind the camera)
+    if np.any(corners_camera[:, 2] < 0):
+        return None
+
+    # Project Corners
+    corners_image = corners_camera @ intrinsic.T
+    corners_image = corners_image / corners_image[:, 2].reshape(-1, 1)
+
+    # TODO: Handle distortion
+
+    # Get Bounding Box
+    x1, y1 = np.min(corners_image[:, :2], axis=0)
+    x2, y2 = np.max(corners_image[:, :2], axis=0)
+    bbox_2d = np.array([x1, y1, x2, y2])
+
+    if image_size is None:
+        return bbox_2d
+
+    # When image_size is provided
+    x1, y1 = np.clip(x1, 0, image_size[0]), np.clip(y1, 0, image_size[1])
+    x2, y2 = np.clip(x2, 0, image_size[0]), np.clip(y2, 0, image_size[1])
+    bbox_2d = np.array([x1, y1, x2, y2])
+
+    return bbox_2d if (not np.isclose(x1, x2) and not np.isclose(y1, y2)) else None
+
+
+def filter_points_inside_bbox_3d(points: np.ndarray, bbox_3d: np.ndarray) -> np.ndarray:
+    """
+    Filter out points that are inside the 3D bounding box.
+
+    Args:
+        points: (N, 3+) array of 3D points
+        bbox_3d: (9,) array of [cX, cY, cZ, h, l, w, r, p, y]
+
+    Returns:
+        points: (M, 3) array of 3D points
+        where M <= N is the number of points that are inside the bounding box
+    """
+    assert bbox_3d.shape == (9,), "Invalid shape of bbox_3d"
+    cX, cY, cZ, h, l, w, r, p, y = bbox_3d
+
+    # Transform points to the bounding box coordinate system
+    rot_mat = R.from_euler("xyz", [r, p, y], degrees=False).as_matrix()
+    transformed_points = (points[:, :3] - np.array([cX, cY, cZ])) @ rot_mat
+
+    # Filter out points that are inside the bounding box
+    hh, hl, hw = h / 2.0, l / 2.0, w / 2.0
+    mask_inside = (
+        (transformed_points[:, 0] >= -hl)
+        & (transformed_points[:, 0] <= hl)
+        & (transformed_points[:, 1] >= -hw)
+        & (transformed_points[:, 1] <= hw)
+        & (transformed_points[:, 2] >= -hh + 0.15)
+        & (transformed_points[:, 2] <= hh)
+    )
+    return points[mask_inside]
+
+
+# TODO: remove ground points from the point cloud (RANSAC?)
