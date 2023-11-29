@@ -14,7 +14,7 @@ def get_parser():
     parser.add_argument(
         "--keyframe_poses_dir",
         type=str,
-        default="/home/dongmyeong/Projects/AMRL/CODa/correction/map/guad",
+        default="/home/dongmyeong/Projects/AMRL/CODa/correction/dense_map/17",
         help="Path to the keyframe poses directory (output of interactive_slam)",
     )
     parser.add_argument(
@@ -23,6 +23,13 @@ def get_parser():
         type=str,
         default="/home/dongmyeong/Projects/AMRL/CODa",
         help="Path to the dataset directory",
+    )
+    parser.add_argument(
+        "--kf_type",
+        type=str,
+        default="merged",
+        choices=["merged", "dense"],
+        help="keyframe: pose from merged map, dense: pose from dense map",
     )
     return parser
 
@@ -84,7 +91,7 @@ if __name__ == "__main__":
             continue
 
         # Save the relevant keyframes
-        output_dir = dataset_path / "poses" / "keyframe" / f"{ts_file.stem}.txt"
+        output_dir = dataset_path / f"poses/keyframe/{args.kf_type}/{ts_file.stem}.txt"
         with open(output_dir, "w") as f:
             for keyframe in relevant_keyframes:
                 ts = keyframe[0]
