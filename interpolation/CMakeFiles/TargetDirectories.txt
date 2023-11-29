@@ -1,3 +1,0 @@
-/home/dongmyeong/Projects/AMRL/coda-tools/interpolation/CMakeFiles/pose_graph_3d.dir
-/home/dongmyeong/Projects/AMRL/coda-tools/interpolation/CMakeFiles/edit_cache.dir
-/home/dongmyeong/Projects/AMRL/coda-tools/interpolation/CMakeFiles/rebuild_cache.dir

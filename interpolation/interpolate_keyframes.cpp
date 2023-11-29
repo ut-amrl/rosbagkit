@@ -18,10 +18,39 @@
 #include "utils/read_pose.h"
 
 DEFINE_int32(seq, 0, "The sequence number.");
-DEFINE_string(dataset_path, "/home/dongmyeong/Projects/AMRL/CODa", "The dataset path.");
+DEFINE_string(input_kf_dir,
+              "/home/dongmyeong/Projects/AMRL/CODa/poses/keyframe/merged/",
+              "The input keyframe poses.");
+DEFINE_string(input_odom_dir,
+              "/home/dongmyeong/Projects/AMRL/CODa/poses/keyframe/dense/",
+              "The input odometry poses.");
+DEFINE_string(output_dir,
+              "/home/dongmyeong/Projects/AMRL/CODa/poses/keyframe/",
+              "The output poses.");
 
 namespace ut_amrl::slam {
 namespace {
+
+template <typename T>
+RelativePose3d<T> getRelativePose(const T id_begin,
+                                  const Pose3d& pose_begin,
+                                  const T id_end,
+                                  const Pose3d& pose_end) {
+  // Get the relative pose between the odometry poses.
+  RelativePose3d<T> relative_pose;
+  relative_pose.id_begin = id_begin;
+  relative_pose.id_end = id_end;
+
+  Eigen::Quaterniond q_begin_inverse = pose_begin.q.conjugate();
+  relative_pose.t_be.q = q_begin_inverse * pose_end.q;
+  relative_pose.t_be.p = q_begin_inverse * (pose_end.p - pose_begin.p);
+
+  // Set the information matrix for the relative pose.
+  relative_pose.sqrt_information = Eigen::Matrix<T, 6, 6>::Zero();
+  relative_pose.sqrt_information.diagonal() << 1, 1, 1, 1, 1, 1;
+
+  return relative_pose;
+}
 
 template <typename T>
 void buildInterpolationOptimizationProblem(const MapOfPoses3d<T>& kf_poses,
@@ -60,26 +89,67 @@ void buildInterpolationOptimizationProblem(const MapOfPoses3d<T>& kf_poses,
       const auto& kf_pose_lower = kf_lower->second;
       const auto& kf_pose_upper = kf_upper->second;
 
+      double t = (timestamp - kf_lower->first) / (kf_upper->first - kf_lower->first);
+
       // Linear interpolation of the keyframe pose.
-      // TODO: Use Lie algebra for interpolation.
+      manif::SE3d kf_pose_lower_SE3(kf_pose_lower.p, kf_pose_lower.q);
+      manif::SE3d kf_pose_upper_SE3(kf_pose_upper.p, kf_pose_upper.q);
+
+      // xi = log(X_lower^{-1} * X_upper) (ref: https://github.com/artivis/manif)
+      manif::SE3Tangentd xi = kf_pose_upper_SE3 - kf_pose_lower_SE3;
+    
+      // X_interp = X_lower * exp(t * xi)
+      manif::SE3d kf_pose_interp_SE3 = kf_pose_lower_SE3 + t * xi;
+
       Pose3d kf_pose_interp;
-      kf_pose_interp.p = kf_pose_lower.p + (kf_pose_upper.p - kf_pose_lower.p) *
-                                               (timestamp - kf_lower->first) /
-                                               (kf_upper->first - kf_lower->first);
-      Eigen::Quaternion<T> q_interp = kf_pose_lower.q.slerp(
-          (timestamp - kf_lower->first) / (kf_upper->first - kf_lower->first),
-          kf_pose_upper.q);
-      kf_pose_interp.q = q_interp.normalized();
+      kf_pose_interp.p = kf_pose_interp_SE3.translation();
+      kf_pose_interp.q = kf_pose_interp_SE3.quat();
 
       poses->emplace(timestamp, kf_pose_interp);
     }
   }
 
   // #2
+  // Insert the keyframe that is not in the odometry poses. This is to make sure
+  // that the keyframe poses are included in the optimization problem.
+  // Add factor between the keyframe and nearest odometry pose.
+  VectorOfRelativePoses3d<T> relative_poses;
+  for (const auto& [timestamp, kf_pose] : kf_poses) {
+    if (poses->find(timestamp) == poses->end()) {
+      // Insert the keyframe pose that is not in the odometry poses.
+      poses->emplace(timestamp, kf_pose);
+
+      // #2.1 Add factor between the keyframe and nearest odometry pose.
+      const auto& odom_upper = odom_poses.lower_bound(timestamp);
+
+      if (odom_upper == odom_poses.end() || odom_upper->first < timestamp) {
+        break;
+      }
+
+      // Use the interpolated pose to compute the relative pose.
+      const auto& pose_upper = poses->find(odom_upper->first)->second;
+
+      // get the relative pose between the keyframe and odometry pose.
+      relative_poses.push_back(
+          getRelativePose(timestamp, kf_pose, odom_upper->first, pose_upper));
+
+      // #2.2 Add factor between the keyframe and nearest odometry pose.
+      if (odom_upper == odom_poses.begin()) {
+        break;
+      }
+
+      const auto& odom_lower = std::prev(odom_upper);
+      const auto& pose_lower = poses->find(odom_lower->first)->second;
+
+      // get the relative pose between the keyframe and odometry pose.
+      relative_poses.push_back(
+          getRelativePose(timestamp, kf_pose, odom_lower->first, pose_lower));
+    }
+  }
+
+  // #3
   // Get the relative poses between the odometry poses.
   // The relative poses are used as constraints for the pose graph optimization.
-  // TODO: Handle the case when the keyframe and odometry poses are not aligned.
-  VectorOfRelativePoses3d<T> relative_poses;
   for (auto odom_it = odom_poses.begin(); odom_it != odom_poses.end(); ++odom_it) {
     auto odom_next_it = std::next(odom_it);
     if (odom_next_it == odom_poses.end()) {
@@ -90,17 +160,8 @@ void buildInterpolationOptimizationProblem(const MapOfPoses3d<T>& kf_poses,
     const auto& odom_pose_end = odom_next_it->second;
 
     // Get the relative pose between the odometry poses.
-    RelativePose3d<T> relative_pose;
-    relative_pose.id_begin = odom_it->first;
-    relative_pose.id_end = odom_next_it->first;
-
-    Eigen::Quaterniond q_begin_inverse = odom_pose_begin.q.conjugate();
-    relative_pose.t_be.q = q_begin_inverse * odom_pose_end.q;
-    relative_pose.t_be.p = q_begin_inverse * (odom_pose_end.p - odom_pose_begin.p);
-
-    // Set the information matrix for the relative pose.
-    relative_pose.sqrt_information = Eigen::Matrix<T, 6, 6>::Zero();
-    relative_pose.sqrt_information.diagonal() << 1, 1, 1, 0.5, 0.5, 0.5;
+    RelativePose3d<T> relative_pose = getRelativePose(
+        odom_it->first, odom_pose_begin, odom_next_it->first, odom_pose_end);
 
     relative_poses.push_back(relative_pose);
   }
@@ -187,11 +248,12 @@ int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   google::ParseCommandLineFlags(&argc, &argv, true);
 
-  CHECK(!FLAGS_dataset_path.empty()) << "The dataset path is empty.";
-  std::string input_kf =
-      FLAGS_dataset_path + "/poses/keyframe/" + std::to_string(FLAGS_seq) + ".txt";
-  std::string input_odom =
-      FLAGS_dataset_path + "/poses/dense/" + std::to_string(FLAGS_seq) + ".txt";
+  CHECK(!FLAGS_input_kf_dir.empty()) << "The input keyframe directory is empty.";
+  CHECK(!FLAGS_input_odom_dir.empty()) << "The input odometry directory is empty.";
+  CHECK(!FLAGS_output_dir.empty()) << "The output directory is empty.";
+
+  std::string input_kf = FLAGS_input_kf_dir + std::to_string(FLAGS_seq) + ".txt";
+  std::string input_odom = FLAGS_input_odom_dir + std::to_string(FLAGS_seq) + ".txt";
   LOG(INFO) << "Interpolate sequence " << FLAGS_seq;
   LOG(INFO) << "Keyframe : " << input_kf;
   LOG(INFO) << "Odometry : " << input_odom;
@@ -215,8 +277,7 @@ int main(int argc, char** argv) {
       << "Failed to solve the interpolation optimization problem.";
 
   // Write the interpolated poses.
-  std::string output_filename =
-      FLAGS_dataset_path + "/poses/correct/" + std::to_string(FLAGS_seq) + ".txt";
+  std::string output_filename = FLAGS_output_dir + std::to_string(FLAGS_seq) + ".txt";
   CHECK(ut_amrl::slam::outInterpolatedPoses(output_filename, interpolated_poses))
       << "Failed to write the interpolated poses.";
 
