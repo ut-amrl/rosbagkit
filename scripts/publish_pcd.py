@@ -17,7 +17,7 @@ def get_parser():
     parser.add_argument(
         "--pcd",
         type=str,
-        default="/home/dongmyeong/Projects/AMRL/CODa/correction/ut_campus_downsampled.pcd",
+        default="/home/dongmyeong/Projects/AMRL/CODa/correction/ut_campus_downsampled_2d.pcd",
         help="Path to .pcd file",
     )
     parser.add_argument(

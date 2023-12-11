@@ -23,7 +23,7 @@ def get_parser():
     parser.add_argument(
         "--map",
         type=str,
-        default="/home/dongmyeong/Projects/AMRL/CODa/correction/ut_campus_downsampled.pcd",
+        default="/home/dongmyeong/Projects/AMRL/CODa/correction/ut_campus.pcd",
         help="Path to map file (.pcd)",
     )
     parser.add_argument(
@@ -48,13 +48,13 @@ def get_parser():
         "--min_dist",
         type=float,
         default=0.5,
-        help="Minimum distance of point cloud to be considered (LiDAR frame)",
+        help="Minimum distance of point cloud to be considered",
     )
     parser.add_argument(
         "--max_dist",
         type=float,
         default=30.0,
-        help="Maximum distance of point cloud to be considered (LiDAR frame)",
+        help="Maximum distance of point cloud to be considered",
     )
     parser.add_argument(
         "--num_ranges",
@@ -124,13 +124,11 @@ def main(args):
             pc2_msg = np_to_pointcloud2(pointcloud_2d[:, :3], "x y z", "map")
             pub.publish(pc2_msg)
 
-        break
-
     # Save point cloud
     pcd_2d = open3d.geometry.PointCloud()
     pcd_2d.points = open3d.utility.Vector3dVector(pointcloud_2d)
     out_file = Path(args.map).parent / f"{Path(args.map).stem}_2d.pcd"
-    open3d.io.write_point_cloud(out_file, pcd_2d)
+    open3d.io.write_point_cloud(str(out_file), pcd_2d)
 
 
 if __name__ == "__main__":
