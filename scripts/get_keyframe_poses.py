@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 import numpy as np
 
-from helpers.coda_utils import load_keyframe_pose
+from utils.coda_utils import load_keyframe_pose
 
 
 def get_parser():
@@ -56,9 +56,7 @@ def get_relevant_keyframes(
     return keyframes[l_idx:u_idx]
 
 
-if __name__ == "__main__":
-    args = get_parser().parse_args()
-
+def main(args):
     # Get the paths to the pose files and the timestamps
     keyframes_files = list(Path(args.keyframe_poses_dir).glob("[0-9]*/data"))
     print("Load keyframe poses from: ", args.keyframe_poses_dir)
@@ -92,3 +90,8 @@ if __name__ == "__main__":
                 pose = keyframe[1:]
                 f.write(f"{ts:.6f} " + " ".join(f"{p:.8f}" for p in pose) + "\n")
         print(f"Saved {output_dir}")
+
+
+if __name__ == "__main__":
+    args = get_parser().parse_args()
+    main(args)

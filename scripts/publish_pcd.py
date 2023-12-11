@@ -1,6 +1,6 @@
 """
-Author:      Dongmyeong Lee (domlee[at]utexas.edu)
-Date:        November 14, 2023
+Author: Dongmyeong Lee (domlee[at]utexas.edu)
+Date:   Nov 14, 2023
 Description: Publishes a point cloud from a .pcd file
 """
 import argparse
@@ -8,8 +8,8 @@ import argparse
 import rospy
 from sensor_msgs.msg import PointCloud2
 
-from helpers.msg_converter import pcd_to_pointcloud2
-from helpers.ros_utils import wait_for_subscribers
+from utils.msg_converter import pcd_to_pointcloud2
+from utils.ros_utils import wait_for_subscribers
 
 
 def get_parser():
