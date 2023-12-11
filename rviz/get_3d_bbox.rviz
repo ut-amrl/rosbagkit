@@ -103,7 +103,7 @@ Visualization Manager:
       Size (Pixels): 3
       Size (m): 0.10000000149011612
       Style: Flat Squares
-      Topic: /points
+      Topic: /velodyne_points
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
@@ -164,7 +164,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 225.0602569580078
+      Distance: 162.5745849609375
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -172,17 +172,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: -66.35157012939453
-        Y: 57.24039840698242
-        Z: -83.65803527832031
+        X: -39.96029281616211
+        Y: 191.0428009033203
+        Z: -6.634510040283203
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.5697963237762451
+      Pitch: 1.3947964906692505
       Target Frame: <Fixed Frame>
-      Yaw: 3.754141330718994
+      Yaw: 4.594155788421631
     Saved: ~
 Window Geometry:
   Displays:

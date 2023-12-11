@@ -7,7 +7,7 @@ def get_parser():
     parser.add_argument(
         "--input",
         type=str,
-        default="/home/dongmyeong/Projects/AMRL/CODa/correction/map_0_6.pcd",
+        default="/home/dongmyeong/Projects/AMRL/CODa/correction/map_ut_campus.pcd",
         help="input point cloud",
     )
     parser.add_argument("--voxel_size", type=float, default=0.05, help="voxel size")

@@ -14,12 +14,18 @@ namespace ut_amrl::slam {
 
 // Read a single pose from the input and inserts it into the map.
 template <typename Pose, typename Allocator>
-bool readPose(std::ifstream* infile,
+bool readPose(std::istringstream* inlinestream,
               std::map<double, Pose, std::less<double>, Allocator>* poses) {
   double timestamp;
   Pose pose;
   pose.format = "wxyz";
-  *infile >> timestamp >> pose;
+  *inlinestream >> timestamp >> pose;
+
+  // Check if the stream is in good state after reading
+  if (!inlinestream->good() && !inlinestream->eof()) {
+    LOG(ERROR) << "Error reading data from line";
+    return false;
+  }
 
   // Ensure we don't have duplicate timestamps
   if (poses->find(timestamp) != poses->end()) {
@@ -45,14 +51,14 @@ bool readPoseFile(const std::string& filename,
     return false;
   }
 
-  while (infile.good()) {
-    if (!readPose(&infile, poses)) {
+  std::string line;
+  while (std::getline(infile, line)) {
+    std::istringstream inlinestream(line);
+
+    if (!readPose(&inlinestream, poses)) {
       LOG(ERROR) << "Failed to read pose from file: " << filename;
       return false;
     }
-
-    // Skip any whitespace
-    infile >> std::ws;
   }
 
   return true;

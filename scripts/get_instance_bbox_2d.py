@@ -35,7 +35,6 @@ from helpers.msg_converter import (
 from helpers.geometry import (
     transform_bbox_3d,
     project_points_3d_to_2d,
-    project_bbox_3d_to_2d,
     filter_points_inside_bbox_3d,
 )
 from helpers.image_utils import compute_overlap, ratio_within_image
@@ -45,7 +44,7 @@ from helpers.ros_viz_utils import (
     clear_marker_array,
 )
 from helpers.ros_utils import wait_for_subscribers
-from helpers.math_utils import average_rpy
+from helpers.math_utils import average_rpy, adjugate
 from helpers.coda_utils import load_extrinsic_matrix, load_camera_params
 
 # Frames
@@ -61,7 +60,7 @@ CLASSES = {
 }
 
 # Radius for KDTree Query
-RADIUS = 15.0
+RADIUS = 30.0
 
 
 def get_parser():
@@ -78,7 +77,7 @@ def get_parser():
         "--sequences",
         nargs="+",
         type=int,
-        default=[0],
+        default=[0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 16, 17, 18, 19, 20, 21],
         help="Sequence ID",
     )
     parser.add_argument(
@@ -108,6 +107,67 @@ def get_parser():
     return parser
 
 
+def solve_linear_quadratic(G: np.ndarray, l: np.ndarray) -> np.ndarray:
+    """
+    Solve linear-quadratic equation
+    Args:
+        G: (3, 3) Dual Conic Matrix (adjugate of Conic Matrix)
+        l: (3,) Linear Term (ax + by + c)
+    Returns:
+        intersection: (N, 2) Intersection Points
+    """
+    # If l is tangent to the conic there are only one intersection
+    if np.isclose(l @ G @ l.T, 0.0):
+        q = np.dot(G, l)
+        q = q[:2] / q[2]
+        return q
+
+    # If l is not intersecting with the conic
+    if l @ G @ l.T < 0.0:
+        return np.empty((0, 2))
+
+    a = G[0, 0]
+    b = G[1, 1]
+    c = G[0, 1]
+    d = G[0, 2]
+    e = G[1, 2]
+    f = G[2, 2]
+
+    p = np.dot(G, l)  # [u, v, w]
+    u = p[0]
+    v = p[1]
+    w = p[2]
+
+    k_0 = a * w**2 - 2 * d * u * w + f * u**2
+    k_1 = -2 * (c * w**2 - w * (d * v + e * u) + f * u * v)
+    k_2 = w**2 * (b - a) + 2 * w * (d * u - e * v) + f * (v**2 - u**2)
+
+    k_3 = (2 * k_0 + k_2) / np.sqrt(k_1**2 + k_2**2)
+    k_3 = np.clip(k_3, -1.0, 1.0)
+
+    phi_1 = np.arctan2(k_1, k_2) / 2 - np.arcsin(k_3) / 2 - np.pi / 4
+    phi_2 = np.arctan2(k_1, k_2) / 2 + np.arcsin(k_3) / 2 + np.pi / 4
+
+    q_1 = np.array(
+        [
+            (c * w - d * v) * np.cos(phi_1) + (d * u - a * w) * np.sin(phi_1),
+            (b * w - e * v) * np.cos(phi_1) + (e * u - c * w) * np.sin(phi_1),
+            (e * w - f * v) * np.cos(phi_1) + (f * u - d * w) * np.sin(phi_1),
+        ]
+    )
+    q_2 = np.array(
+        [
+            (c * w - d * v) * np.cos(phi_2) + (d * u - a * w) * np.sin(phi_2),
+            (b * w - e * v) * np.cos(phi_2) + (e * u - c * w) * np.sin(phi_2),
+            (e * w - f * v) * np.cos(phi_2) + (f * u - d * w) * np.sin(phi_2),
+        ]
+    )
+
+    q_1 = q_1[:2] / q_1[2]
+    q_2 = q_2[:2] / q_2[2]
+    return np.array([q_1, q_2])
+
+
 def get_bbox_2d(
     bbox_3d: np.ndarray,
     pointcloud: np.ndarray,
@@ -116,10 +176,11 @@ def get_bbox_2d(
     image_size: tuple[int, int],
 ) -> Optional[tuple[np.ndarray, np.ndarray]]:
     """
-    Get 2D Bounding Box from 3D Bounding Box
+    Get 2D Bounding Box from 3D Bounding Box by checking points existence in 3D Bounding
+    Box and projecting ellipsoid onto 2D Image Plane
 
     Args:
-        bbox_3d: (9,) 3D Bounding Box in LiDAR Frame (cx, cy, cz, h, l, w, r, p, y)
+        bbox_3d: (9,) 3D Bounding Box in LiDAR Frame (cx, cy, cz, l, w, h, r, p, y)
         pointcloud: (N, 3+) Pointcloud in LiDAR Frame (x, y, z, intensity, ...)
         extrinsic: (4, 4) Camera Extrinsic Matrix (LiDAR Frame -> Camera Frame)
         intrinsic: (3, 3) Camera Intrinsic Matrix (Camera Frame -> Image Frame)
@@ -134,6 +195,8 @@ def get_bbox_2d(
     assert intrinsic.shape == (3, 3), "Invalid Camera Intrinsic Matrix Shape"
     assert len(image_size) == 2, "Invalid Image Size"
 
+    w, h = image_size
+
     # Check whether 3D Bounding Box is in front of the camera
     centroid_cam = np.dot(extrinsic, np.append(bbox_3d[:3], 1.0))[:3]
     if centroid_cam[2] < 1e-3:
@@ -141,44 +204,90 @@ def get_bbox_2d(
 
     # Count Points in 3D Bounding Box
     bbox_3d_margin = bbox_3d.copy()
-    bbox_3d_margin[4:6] += 1.0  # Add margin to length and width
+    bbox_3d_margin[3:5] += 1.0  # Add margin to length and width
     points_in_bbox = filter_points_inside_bbox_3d(pointcloud, bbox_3d_margin)
 
     # bbox is not visible
-    if len(points_in_bbox) < 20:
+    if len(points_in_bbox) < 50:
         return None, None
 
-    # Clustering
-    clustering = DBSCAN(eps=0.5, min_samples=10).fit(points_in_bbox[:, :3])
-    labels = clustering.labels_
+    # Get Ellipsoid from 3D Bounding Box
+    rot = R.from_euler("xyz", bbox_3d[6:9]).as_matrix()
+    t = bbox_3d[:3]
 
-    # Get the largest cluster
-    unique_labels, counts = np.unique(labels[labels != -1], return_counts=True)
-    if len(unique_labels) == 0:
-        return None, None
-    largest_cluster = unique_labels[np.argmax(counts)]
-    points_in_bbox = points_in_bbox[labels == largest_cluster]
+    # Adjoint Quadratic Form
+    D = np.diag((bbox_3d[3:6] / 2.0) ** 2)
+    Q = np.zeros((4, 4))
+    Q[:3, :3] = rot @ D @ rot.T - np.outer(t, t)
+    Q[:3, 3] = -t
+    Q[3, :3] = -t.T
+    Q[3, 3] = -1.0
 
-    detected_height = np.max(points_in_bbox[:, 2]) - np.min(points_in_bbox[:, 2])
-    # Use Points in 3D Bounding Box to get 2D Bounding Box
-    if detected_height > bbox_3d[3] - 0.6:
-        projected_points, _ = project_points_3d_to_2d(
-            points_in_bbox, extrinsic, intrinsic
-        )
-        if len(projected_points) < 10:
-            return None, None
-        bbox_2d = np.array(
-            [
-                np.min(projected_points[:, 0]),
-                np.min(projected_points[:, 1]),
-                np.max(projected_points[:, 0]),
-                np.max(projected_points[:, 1]),
-            ]
-        )
+    # Project Ellipsoid to Image Plane
+    P = intrinsic @ extrinsic[:3]  # Projection Matrix (3, 4)
+    G = P @ Q @ P.T  # Dual Conic Matrix (3, 3)
+
+    # 1. Get Extrema of Ellipsoid
+    x_extrema = np.roots([G[2, 2], -2 * G[0, 2], G[0, 0]])
+    y_extrema = np.roots([G[2, 2], -2 * G[1, 2], G[1, 1]])
+    x_min, x_max = np.min(x_extrema), np.max(x_extrema)
+    y_min, y_max = np.min(y_extrema), np.max(y_extrema)
+
+    # Projected ellipsoid is inside the image
+    if x_min >= 0 and x_max < w and y_min >= 0 and y_max < h:
+        bbox_2d = np.array([x_min, y_min, x_max, y_max])
         return bbox_2d, points_in_bbox
 
-    # Project 3D Bounding Box to 2D Bounding Box
-    bbox_2d = project_bbox_3d_to_2d(bbox_3d, extrinsic, intrinsic)
+    # compute points of extrema points
+    extrema = []
+    extrema.append(solve_linear_quadratic(G, np.array([-1, 0, x_min])))
+    extrema.append(solve_linear_quadratic(G, np.array([-1, 0, x_max])))
+    extrema.append(solve_linear_quadratic(G, np.array([0, -1, y_min])))
+    extrema.append(solve_linear_quadratic(G, np.array([0, -1, y_max])))
+    extrema = np.vstack(extrema)
+
+    # compute intersection of conic with x=0, x=width, y=0, y=height
+    intersections = []
+    if x_min < 0:
+        intersections.append(solve_linear_quadratic(G, np.array([1, 0, 0])))
+    if x_max >= w:
+        intersections.append(solve_linear_quadratic(G, np.array([-1, 0, w])))
+    if y_min < 0:
+        intersections.append(solve_linear_quadratic(G, np.array([0, 1, 0])))
+    if y_max >= h:
+        intersections.append(solve_linear_quadratic(G, np.array([0, -1, h])))
+    intersections = np.vstack(intersections)
+
+    # get points inside the image
+    points = np.vstack((extrema, intersections))
+    points = points[~np.isnan(points).any(axis=1) & np.isreal(points).all(axis=1)]
+    # Adjusting values to be within image
+    points[:, 0] = np.where(np.isclose(points[:, 0], 0, atol=1e-3), 0, points[:, 0])
+    points[:, 0] = np.where(np.isclose(points[:, 0], w, atol=1e-3), w, points[:, 0])
+    points[:, 1] = np.where(np.isclose(points[:, 1], 0, atol=1e-3), 0, points[:, 1])
+    points[:, 1] = np.where(np.isclose(points[:, 1], h, atol=1e-3), h, points[:, 1])
+
+    points = points[
+        ~np.isnan(points).any(axis=1)
+        & np.isreal(points).all(axis=1)
+        & (points[:, 0] >= 0)
+        & (points[:, 0] <= w)
+        & (points[:, 1] >= 0)
+        & (points[:, 1] <= h)
+    ]
+
+    if len(points) == 0:
+        return None, None
+
+    bbox_2d = np.array(
+        [
+            np.min(points[:, 0]),
+            np.min(points[:, 1]),
+            np.max(points[:, 0]),
+            np.max(points[:, 1]),
+        ]
+    )
+
     return bbox_2d, points_in_bbox
 
 
@@ -201,14 +310,17 @@ def process_bboxes_frame(
     drawn_bboxes = []
     # Draw Bounding Box
     for instance_id, bbox_2d, _ in bbox_frame:
-        # Check if bbox is occluded or out of image
+        # Check if bbox is occluded or too small
         if (
             any(
                 compute_overlap(bbox_2d, drawn_bbox) > 0.5
                 for _, drawn_bbox in drawn_bboxes
             )
-            or ratio_within_image(bbox_2d, img.shape[:2]) < 0.5
-            or (bbox_2d[2] - bbox_2d[0]) * (bbox_2d[3] - bbox_2d[1]) < 300
+            or bbox_2d[2] - bbox_2d[0] < 40 # dx
+            or bbox_2d[3] - bbox_2d[1] < 40 # dy
+            or bbox_2d[2] < 100
+            or bbox_2d[0] > img.shape[1] - 100
+            or (bbox_2d[2] - bbox_2d[0]) * (bbox_2d[3] - bbox_2d[1]) < 600
         ):
             continue
 
@@ -237,18 +349,18 @@ def process_bboxes_frame(
         )
         drawn_bboxes.append((instance_id, bbox_2d))
 
-    # Save Bounding Box Information
-    if output_file is not None:
-        os.makedirs(os.path.dirname(output_file), exist_ok=True)
-        with open(output_file, "w") as f:
-            for (
-                instance_id,
-                bbox_2d,
-            ) in drawn_bboxes:
-                class_name, instance_id = instance_id.split("_")
-                f.write(
-                    f"{class_name} {instance_id} {bbox_2d[0]} {bbox_2d[1]} {bbox_2d[2]} {bbox_2d[3]}\n"
-                )
+    # # Save Bounding Box Information
+    # if output_file is not None:
+        # os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        # with open(output_file, "w") as f:
+            # for (
+                # instance_id,
+                # bbox_2d,
+            # ) in drawn_bboxes:
+                # class_name, instance_id = instance_id.split("_")
+                # f.write(
+                    # f"{class_name} {instance_id} {bbox_2d[0]} {bbox_2d[1]} {bbox_2d[2]} {bbox_2d[3]}\n"
+                # )
 
 
 def main(args):
@@ -307,7 +419,7 @@ def main(args):
             # fmt: off
             bbox = np.array([
                 bbox_3d["cX"], bbox_3d["cY"], bbox_3d["cZ"],
-                bbox_3d["h"], bbox_3d["l"], bbox_3d["w"],
+                bbox_3d["l"], bbox_3d["w"], bbox_3d["h"],
                 bbox_3d["r"], bbox_3d["p"], bbox_3d["y"]
             ])
             # fmt: on
@@ -335,7 +447,7 @@ def main(args):
     # Main Loop
     for seq in args.sequences:
         pose_file = dataset_path / "poses" / "correct" / f"{seq}.txt"
-        pose_np = np.loadtxt(pose_file, delimiter=" ").reshape(-1, 8)
+        pose_np = np.loadtxt(pose_file, delimiter=" ")[:, :8]
 
         timestamp_file = dataset_path / "timestamps" / f"{seq}.txt"
         timestamp_np = np.loadtxt(timestamp_file, delimiter=" ")
@@ -363,25 +475,24 @@ def main(args):
             frame = np.searchsorted(timestamp_np, pose[0], side="left")
             ts = rospy.Time.from_sec(pose[0])
 
-            if frame % 10 != 0:
-                continue
-
             # Publish Clock
             clock_pub.publish(ts)
 
             # Publish LiDAR Odometry and Path
             odom_msg = odometry_from_xyz_quat(
-                pose[1:4], pose[4:], global_frame, lidar_frame, ts
+                pose[1:4], pose[4:8], global_frame, lidar_frame, ts
             )
             odom_pub.publish(odom_msg)
 
-            pose_msg = pose_stamped_from_xyz_quat(pose[1:4], pose[4:], global_frame, ts)
+            pose_msg = pose_stamped_from_xyz_quat(
+                pose[1:4], pose[4:8], global_frame, ts
+            )
             global_path.poses.append(pose_msg)
             path_pub.publish(global_path)
 
             # Publish TF
             tf_msg = tf_msg_from_quat(
-                pose[1:4], pose[4:], global_frame, lidar_frame, ts
+                pose[1:4], pose[4:8], global_frame, lidar_frame, ts
             )
             tf_broadcaster.sendTransform(tf_msg)
 
@@ -420,7 +531,7 @@ def main(args):
                         frame_id=global_frame,
                         marker_id=int(instance_id.split("_")[-1]),
                         namespace=instance_id,
-                        color=(1.0, 1.0, 1.0),
+                        color=(0.5, 1.0, 0.5),
                         alpha=0.5,
                     )
                     marker_array.markers.append(bbox_marker)
@@ -433,7 +544,7 @@ def main(args):
             pc_in_bbox = np.empty((0, 4))
             for cam in cam_list:
                 # list of tuple(instance_id, bbox_2d, bbox_3d_lidar)
-                bboxes_frame = []  # list of tuple(class_name, bbox_2d)
+                bboxes_frame: list[tuple[str, np.ndarray, np.ndarray]] = []
                 img = cv2.imread(str(img_files[cam]))
                 for class_name in CLASSES:
                     for idx in queried_indices[class_name]:

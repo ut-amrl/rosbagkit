@@ -17,8 +17,14 @@ def get_parser():
     parser.add_argument(
         "--pcd",
         type=str,
-        default="/home/dongmyeong/Projects/AMRL/CODa/correction/map_0_6_downsampled.pcd",
+        default="/home/dongmyeong/Projects/AMRL/CODa/correction/ut_campus_downsampled.pcd",
         help="Path to .pcd file",
+    )
+    parser.add_argument(
+        "--topic",
+        type=str,
+        default="/global_map",
+        help="Topic name to publish the point cloud",
     )
     parser.add_argument(
         "--frame_id",
@@ -32,12 +38,9 @@ def get_parser():
 def main(args):
     rospy.init_node("pcd_publisher", anonymous=True)
 
-    pcd_pub = rospy.Publisher("/global_map", PointCloud2, queue_size=1, latch=True)
-
+    pcd_pub = rospy.Publisher(args.topic, PointCloud2, queue_size=1, latch=True)
     pc_msg = pcd_to_pointcloud2(args.pcd, "x y z", args.frame_id)
-
     wait_for_subscribers(pcd_pub)
-
     pcd_pub.publish(pc_msg)
 
     rospy.spin()

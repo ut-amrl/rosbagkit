@@ -14,7 +14,7 @@ def get_parser():
     parser.add_argument(
         "--keyframe_poses_dir",
         type=str,
-        default="/home/dongmyeong/Projects/AMRL/CODa/correction/dense_map/17",
+        default="/home/dongmyeong/Projects/AMRL/CODa/correction/map/ut_campus",
         help="Path to the keyframe poses directory (output of interactive_slam)",
     )
     parser.add_argument(
@@ -23,13 +23,6 @@ def get_parser():
         type=str,
         default="/home/dongmyeong/Projects/AMRL/CODa",
         help="Path to the dataset directory",
-    )
-    parser.add_argument(
-        "--kf_type",
-        type=str,
-        default="merged",
-        choices=["merged", "dense"],
-        help="keyframe: pose from merged map, dense: pose from dense map",
     )
     return parser
 
@@ -68,6 +61,7 @@ if __name__ == "__main__":
 
     # Get the paths to the pose files and the timestamps
     keyframes_files = list(Path(args.keyframe_poses_dir).glob("[0-9]*/data"))
+    print("Load keyframe poses from: ", args.keyframe_poses_dir)
 
     # Get the keyframe poses
     keyframes = np.array(
@@ -91,7 +85,7 @@ if __name__ == "__main__":
             continue
 
         # Save the relevant keyframes
-        output_dir = dataset_path / f"poses/keyframe/{args.kf_type}/{ts_file.stem}.txt"
+        output_dir = dataset_path / f"poses/keyframe/{ts_file.stem}.txt"
         with open(output_dir, "w") as f:
             for keyframe in relevant_keyframes:
                 ts = keyframe[0]

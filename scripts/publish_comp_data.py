@@ -53,8 +53,8 @@ def get_parser():
     )
     parser.add_argument(
         "--pose_type",
-        choices=["dense", "correct", "keyframe"],
-        default="dense",
+        choices=["", "dense", "correct", "keyframe", "inekfodom", "inekfodom/sync"],
+        default="",
         help="Pose type (Options: dense, correct, keyframe)",
     )
     parser.add_argument(
@@ -110,7 +110,7 @@ def main(args):
 
         # Load Pose & Timestamp
         pose_file = dataset_path / "poses" / args.pose_type / f"{sequence}.txt"
-        pose_np = np.loadtxt(pose_file, delimiter=" ").reshape(-1, 8)
+        pose_np = np.loadtxt(pose_file, delimiter=" ")[:, :8]
 
         timestamp_file = dataset_path / "timestamps" / f"{sequence}.txt"
         timestamp_np = np.loadtxt(timestamp_file, delimiter=" ")
@@ -132,17 +132,19 @@ def main(args):
 
             # Publish LiDAR Pose and Path
             odom_msg = odometry_from_xyz_quat(
-                pose[1:4], pose[4:], global_frame, lidar_frame, ts
+                pose[1:4], pose[4:8], global_frame, lidar_frame, ts
             )
             odom_pub.publish(odom_msg)
 
-            pose_msg = pose_stamped_from_xyz_quat(pose[1:4], pose[4:], global_frame, ts)
+            pose_msg = pose_stamped_from_xyz_quat(
+                pose[1:4], pose[4:8], global_frame, ts
+            )
             global_path.poses.append(pose_msg)
             path_pub.publish(global_path)
 
             # Publish TF
             tf_msg = tf_msg_from_quat(
-                pose[1:4], pose[4:], global_frame, lidar_frame, ts
+                pose[1:4], pose[4:8], global_frame, lidar_frame, ts
             )
             tf_broadcaster.sendTransform(tf_msg)
 

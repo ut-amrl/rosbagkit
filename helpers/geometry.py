@@ -32,14 +32,14 @@ def get_corners_bbox_3d(bbox_3d: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     5 -------- 7       y left <-----------O
 
     Args:
-        bbox_3d: (9, ) array of [cX, cY, cZ, h, l, w, r, p, y]
+        bbox_3d: (9, ) array of [cX, cY, cZ, l, w, h, r, p, y]
 
     Returns:
         corners: (8, 3) array of 3D points
         edges: (12, 2) array of edges (corner1_idx, corner2_idx)
     """
     assert bbox_3d.shape == (9,), "Invalid shape of bbox_3d"
-    cX, cY, cZ, h, l, w, r, p, y = bbox_3d
+    cX, cY, cZ, l, w, h, r, p, y = bbox_3d
 
     # Create transformation matrix from the given r, p, y
     rot_mat = R.from_euler("xyz", [r, p, y], degrees=False).as_matrix()
@@ -72,15 +72,15 @@ def transform_bbox_3d(bbox_3d: np.ndarray, transformation: np.ndarray) -> np.nda
              transformation should be LiDAR to map transformation matrix
 
     Args:
-        bbox_3d: (9, ) array of [cX, cY, cZ, h, l, w, r, p, y]
+        bbox_3d: (9, ) array of [cX, cY, cZ, l, w, h, r, p, y]
         transformation: (4, 4) transformation matrix
 
     Returns:
-        transformed_bbox_3d: (9, ) array of [cX, cY, cZ, h, l, w, r, p, y]
+        transformed_bbox_3d: (9, ) array of [cX, cY, cZ, l, w, h, r, p, y]
     """
     assert bbox_3d.shape == (9,), "Invalid shape of bbox_3d"
     assert transformation.shape == (4, 4), "Invalid shape of transformation"
-    cX, cY, cZ, h, l, w, r, p, y = bbox_3d
+    cX, cY, cZ, l, w, h, r, p, y = bbox_3d
 
     bbox_frame = np.eye(4)
     bbox_frame[:3, 3] = np.array([cX, cY, cZ])
@@ -90,7 +90,7 @@ def transform_bbox_3d(bbox_3d: np.ndarray, transformation: np.ndarray) -> np.nda
 
     transformed_bbox_3d = np.zeros(9)
     transformed_bbox_3d[:3] = transformed_bbox_frame[:3, 3]
-    transformed_bbox_3d[3:6] = np.array([h, l, w])
+    transformed_bbox_3d[3:6] = np.array([l, w, h])
     transformed_bbox_3d[6:9] = R.from_matrix(transformed_bbox_frame[:3, :3]).as_euler(
         "xyz", degrees=False
     )
@@ -167,64 +167,6 @@ def project_points_3d_to_2d(
     return points_image, depths
 
 
-def project_bbox_3d_to_2d(
-    bbox_3d: np.ndarray,
-    extrinsic: np.ndarray,
-    intrinsic: np.ndarray,
-    image_size: Optional[np.ndarray] = None,
-    dist_coeff: Optional[np.ndarray] = None,
-) -> Optional[np.ndarray]:
-    """
-    Project 3D bounding box onto the image plane. If the bounding box is
-    behind the camera, compute the intersection of the bounding box with the
-    camera x-y plane and project the intersection points onto the image plane.
-
-    Args:
-        bbox_3d: (9,) array of [cX, cY, cZ, h, l, w, r, p, y]
-        extrinsic: (4, 4) extrinsic matrix
-        intrinsic: (3, 3) intrinsic matrix
-        image_size: (2,) image size (width, height) in pixels (optional)
-        dist_coeff: (5,) dist_coeff coefficients (k1, k2, p1, p2, k3) (optional)
-
-    Returns:
-        x1, y1, x2, y2: (4,) coordinates of the bounding box (in pixels)
-    """
-    # Get corners of the bounding box in the local frame (e.g., LiDAR frame)
-    corners, edges = get_corners_bbox_3d(bbox_3d)
-
-    # Transform corners to the camera coordinate system
-    corners_homo = np.column_stack((corners, np.ones(corners.shape[0])))
-    corners_camera = corners_homo @ extrinsic[:3, :].T
-
-    # Check if all corners are behind the camera
-    if np.all(corners_camera[:, 2] < 0):
-        return None
-
-    # TODO: Handle edge case (part of bbox_3d are behind the camera)
-    if np.any(corners_camera[:, 2] < 0):
-        return None
-
-    # Project Corners
-    corners_image = corners_camera @ intrinsic.T
-    corners_image = corners_image / corners_image[:, 2].reshape(-1, 1)
-
-    # TODO: Handle distortion
-
-    # Get Bounding Box
-    x1, y1 = np.min(corners_image[:, :2], axis=0)
-    x2, y2 = np.max(corners_image[:, :2], axis=0)
-    bbox_2d = np.array([x1, y1, x2, y2])
-
-    if image_size is None:
-        return bbox_2d
-
-    # When image_size is provided
-    x1, y1 = np.clip(x1, 0, image_size[0]), np.clip(y1, 0, image_size[1])
-    x2, y2 = np.clip(x2, 0, image_size[0]), np.clip(y2, 0, image_size[1])
-    bbox_2d = np.array([x1, y1, x2, y2])
-
-    return bbox_2d if (not np.isclose(x1, x2) and not np.isclose(y1, y2)) else None
-
 
 def filter_points_inside_bbox_3d(points: np.ndarray, bbox_3d: np.ndarray) -> np.ndarray:
     """
@@ -232,14 +174,14 @@ def filter_points_inside_bbox_3d(points: np.ndarray, bbox_3d: np.ndarray) -> np.
 
     Args:
         points: (N, 3+) array of 3D points
-        bbox_3d: (9,) array of [cX, cY, cZ, h, l, w, r, p, y]
+        bbox_3d: (9,) array of [cX, cY, cZ, l, w, h, r, p, y]
 
     Returns:
         points: (M, 3) array of 3D points
         where M <= N is the number of points that are inside the bounding box
     """
     assert bbox_3d.shape == (9,), "Invalid shape of bbox_3d"
-    cX, cY, cZ, h, l, w, r, p, y = bbox_3d
+    cX, cY, cZ, l, w, h, r, p, y = bbox_3d
 
     # Transform points to the bounding box coordinate system
     rot_mat = R.from_euler("xyz", [r, p, y], degrees=False).as_matrix()
@@ -256,6 +198,3 @@ def filter_points_inside_bbox_3d(points: np.ndarray, bbox_3d: np.ndarray) -> np.
         & (transformed_points[:, 2] <= hh)
     )
     return points[mask_inside]
-
-
-# TODO: remove ground points from the point cloud (RANSAC?)

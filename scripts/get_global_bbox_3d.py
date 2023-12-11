@@ -62,13 +62,13 @@ def get_parser():
         "--sequences",
         nargs="+",
         type=int,
-        default=[2, 7, 12, 16, 17, 21],
+        default=[0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 16, 17, 18, 19, 20, 21],
         help="Sequence ID",
     )
     return parser
 
 
-def cluster_average_bbox_3d(bboxes: np.ndarray, threshold: float = 1.0) -> np.ndarray:
+def cluster_average_bbox_3d(bboxes: np.ndarray, threshold: float = 1.5) -> np.ndarray:
     """
     Clustering and averaging 3D bounding boxes
 
@@ -120,7 +120,7 @@ def main(args):
     # Data Path
     dataset_path = pathlib.Path(args.dataset)
 
-    # Bbox [cx, cy, cz, h, l, w, r, p, y]
+    # Bbox [cx, cy, cz, l, w, h, r, p, y]
     bboxes = {class_name: np.empty((0, 9)) for class_name in classes}
 
     # Accumulate 3D Bounding Box
@@ -135,6 +135,7 @@ def main(args):
         bbox_3d_root_dir = dataset_path / "3d_bbox" / "os1" / str(sequence)
 
         # Main Loop
+        print(f"Processing Sequence {sequence}")
         for pose in tqdm(pose_np, total=len(pose_np)):
             frame = np.searchsorted(timestamp_np, pose[0], side="left")
 
@@ -159,7 +160,7 @@ def main(args):
                 # fmt: off
                 bbox = np.array([
                     bbox_3d["cX"], bbox_3d["cY"], bbox_3d["cZ"],
-                    bbox_3d["h"], bbox_3d["l"], bbox_3d["w"],
+                    bbox_3d["l"], bbox_3d["w"], bbox_3d["h"],
                     bbox_3d["r"], bbox_3d["p"], bbox_3d["y"]
                 ])
                 # fmt: on
@@ -196,9 +197,9 @@ def main(args):
                 "cX": bbox[0],
                 "cY": bbox[1],
                 "cZ": bbox[2],
-                "h": bbox[3],
-                "l": bbox[4],
-                "w": bbox[5],
+                "h": bbox[5],
+                "l": bbox[3],
+                "w": bbox[4],
                 "r": bbox[6],
                 "p": bbox[7],
                 "y": bbox[8],
