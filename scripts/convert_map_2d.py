@@ -23,7 +23,7 @@ def get_parser():
     parser.add_argument(
         "--map",
         type=str,
-        default="/home/dongmyeong/Projects/AMRL/CODa/correction/ut_campus.pcd",
+        default="/home/dongmyeong/Projects/AMRL/CODa/correction/ut_campus_downsampled.pcd",
         help="Path to map file (.pcd)",
     )
     parser.add_argument(
@@ -32,6 +32,12 @@ def get_parser():
         default="/home/dongmyeong/Projects/AMRL/CODa/poses/keyframe",
         help="Path to poses file (.txt)",
     )
+    parser.add_argument(
+            "--dataset",
+            type=str,
+            default="/home/dongmyeong/Projects/AMRL/CODa",
+            help="Path to dataset",
+            )
     parser.add_argument(
         "--min_height",
         type=float,
@@ -66,40 +72,36 @@ def get_parser():
 
 
 def main(args):
-    # Load Map
-    pcd_map = open3d.io.read_point_cloud(args.map)
-    pcd_map_np = np.asarray(pcd_map.points)
-    # KDTree for fast radius search
-    pcd_map_tree = KDTree(pcd_map_np)
-
     rospy.init_node("map_2d", anonymous=True)
     pub = rospy.Publisher("/map_2d", PointCloud2, queue_size=10)
 
     # 2D pointcloud for ENML localization
     pointcloud_2d = np.zeros((0, 3))
+
     # Main loop
     pose_files = natsorted(Path(args.poses).glob("*.txt"))
     for pose_file in pose_files:
-        pose_np = np.loadtxt(pose_file, delimiter=" ")[:, :8]
+        sequence = pose_file.stem.split("_")[0]
+        pc_root_dir = Path(args.dataset) / "3d_comp/os1" / str(sequence)
 
+        timestamp_file = Path(args.dataset) / "timestamps" / f"{sequence}.txt"
+        timestamps = np.loadtxt(timestamp_file, delimiter=" ")
+
+        pose_np = np.loadtxt(pose_file, delimiter=" ")[:, :8]
         for pose in tqdm(pose_np, total=len(pose_np)):
+            frame = np.searchsorted(timestamps, pose[0], side="left")
+
             pose_mat = np.eye(4)
             pose_mat[:3, :3] = R.from_quat(pose[[5, 6, 7, 4]]).as_matrix()
             pose_mat[:3, 3] = pose[1:4]
 
-            # Query point cloud
-            query_idx = pcd_map_tree.query_ball_point(pose_mat[:3, 3], r=args.max_dist)
-            queried_pcd_map = pcd_map_np[query_idx]
-
-            # Transform point cloud to LiDAR frame
-            queried_pcd_map_lidar = (
-                np.column_stack((queried_pcd_map, np.ones(queried_pcd_map.shape[0])))
-                @ np.linalg.inv(pose_mat).T
-            )
+            # Load point cloud
+            pc_file = pc_root_dir / f"3d_comp_os1_{sequence}_{frame}.bin"
+            pc_np = np.fromfile(pc_file, dtype=np.float32).reshape(-1, 4)[:, :3]
 
             # Convert to laserscan
             ranges = np.inf * np.ones(args.num_ranges)
-            for point in queried_pcd_map_lidar:
+            for point in pc_np:
                 if point[2] < args.min_height or point[2] > args.max_height:
                     continue
 

@@ -7,7 +7,7 @@ def get_parser():
     parser.add_argument(
         "--input",
         type=str,
-        default="/home/dongmyeong/Projects/AMRL/CODa/correction/map_ut_campus.pcd",
+        default="/home/dongmyeong/Projects/AMRL/CODa/correction/ut_campus.pcd",
         help="input point cloud",
     )
     parser.add_argument("--voxel_size", type=float, default=0.05, help="voxel size")
@@ -45,16 +45,16 @@ if __name__ == "__main__":
     pcd_downsampled = pcd.voxel_down_sample(voxel_size=args.voxel_size)
     print(f"Point cloud downsampled with a voxel size of {args.voxel_size}")
 
-    ## Statistical outlier removal
-    pcd_downsampled, _ = pcd_downsampled.remove_statistical_outlier(
-        nb_neighbors=args.nb_neighbors, std_ratio=args.std_ratio
-    )
-    print("Done statistical outlier removal")
+    # ## Statistical outlier removal
+    # pcd_downsampled, _ = pcd_downsampled.remove_statistical_outlier(
+        # nb_neighbors=args.nb_neighbors, std_ratio=args.std_ratio
+    # )
+    # print("Done statistical outlier removal")
 
-    ## Radius outlier removal
-    pcd_downsampled, _ = pcd_downsampled.remove_radius_outlier(
-        nb_points=args.min_nb_points, radius=args.radius
-    )
+    # ## Radius outlier removal
+    # pcd_downsampled, _ = pcd_downsampled.remove_radius_outlier(
+        # nb_points=args.min_nb_points, radius=args.radius
+    # )
 
     # Write the processed point cloud
     output = args.input.split(".")[0] + "_downsampled.pcd"
