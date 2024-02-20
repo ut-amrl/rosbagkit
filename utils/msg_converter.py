@@ -1,12 +1,13 @@
 """
 Author:      Dongmyeong Lee (domlee[at]utexas.edu)
-Date:        September 16, 2023
+Date:        Sep 16, 2023
 Description: A collection of functions to convert data to ROS messages
 """
 from typing import Optional, Literal
 import rospy
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+import struct
 
 from std_msgs.msg import Header
 from sensor_msgs.msg import PointCloud2, PointField, Imu
@@ -36,22 +37,37 @@ def np_to_pointcloud2(
         sensor_msgs.msg.PointCloud2 message
     """
     field_names = point_type.split()
-    assert points.shape[1] == len(field_names), "Points and point_type do not match"
+    assert points.shape[-1] == len(field_names), "Points and point_type do not match"
+    assert len(points.shape) in [2, 3], "Points must be a 2D or 3D array"
+
+    # Define PointCloud2
+    pc2_msg = PointCloud2()
+    pc2_msg.header = Header()
+    pc2_msg.header.frame_id = frame_id
+    pc2_msg.header.stamp = time_stamp or rospy.Time.now()
+
+    pc2_msg.height = 1 if len(points.shape) == 2 else points.shape[0]
+    pc2_msg.width = points.shape[0] if len(points.shape) == 2 else points.shape[1]
+
+    pc2_msg.is_bigendian = False
+    pc2_msg.is_dense = True
 
     # fmt: off
+    # Ouster Point Type
     field_types = {
-        "x":         (np.float32, PointField.FLOAT32),
-        "y":         (np.float32, PointField.FLOAT32),
-        "z":         (np.float32, PointField.FLOAT32),
-        "i":         (np.float32, PointField.FLOAT32),
-        "intensity": (np.float32, PointField.FLOAT32),
-        "ring":      (np.uint16,  PointField.UINT16),
-        "t":         (np.float32, PointField.FLOAT32),
-        "time":      (np.float32, PointField.FLOAT32),
-        "r":         (np.uint8,   PointField.UINT8),
-        "g":         (np.uint8,   PointField.UINT8),
-        "b":         (np.uint8,   PointField.UINT8),
+        "x":            (np.float32, PointField.FLOAT32),
+        "y":            (np.float32, PointField.FLOAT32),
+        "z":            (np.float32, PointField.FLOAT32),
+        "i":            (np.float32, PointField.FLOAT32),
+        "intensity":    (np.float32, PointField.FLOAT32),
+        "t":            (np.uint32,  PointField.UINT32),
+        "time":         (np.uint32,  PointField.UINT32),
+        "ring":         (np.uint8,   PointField.UINT8),
+        "reflectivity": (np.uint16,  PointField.UINT16),
+        "ambient":      (np.uint16,  PointField.UINT16),
+        "range":        (np.uint32,  PointField.UINT32),
     }
+    # fmt: on
 
     # Check the point type and adjust fields and data shape accordingly
     fields = []
@@ -65,25 +81,27 @@ def np_to_pointcloud2(
         offsets += np.dtype(np_dtype).itemsize
         dtype.append((field_name, np_dtype))
 
-    # Convert to structured array
-    structured_points = np.core.records.fromarrays(points.T, dtype=dtype)
-
-    # Define PointCloud2
-    pc2_msg = PointCloud2()
-    pc2_msg.header = Header()
-    pc2_msg.header.frame_id = frame_id
-    pc2_msg.header.stamp = time_stamp or rospy.Time.now()
-
-    pc2_msg.height = 1
-    pc2_msg.width = points.shape[0]
+    pc2_msg.fields = fields
     pc2_msg.point_step = offsets
     pc2_msg.row_step = pc2_msg.point_step * pc2_msg.width
 
-    pc2_msg.is_bigendian = False
-    pc2_msg.is_dense = True
-    pc2_msg.fields = fields
-    pc2_msg.data = structured_points.tobytes()
+    # Convert points to a structured array
+    if len(points.shape) == 2:
+        structured_points = np.empty((points.shape[0],), dtype=dtype)
+        for i, field_name in enumerate(field_names):
+            structured_points[field_name] = points[:, i].flatten()
+    elif len(points.shape) == 3:
+        structured_points = np.empty((points.shape[0] * points.shape[1],), dtype=dtype)
+        for i, field_name in enumerate(field_names):
+            structured_points[field_name] = points[:, :, i].flatten()
+    else:
+        raise ValueError("Points must be a 2D or 3D array")
 
+    # rearrange the row by time
+    if "t" in field_names:
+        structured_points = np.sort(structured_points, order="t")
+
+    pc2_msg.data = structured_points.tobytes()
     return pc2_msg
 
 

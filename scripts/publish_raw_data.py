@@ -7,7 +7,9 @@ import os
 import pathlib
 import argparse
 from tqdm import tqdm
+from natsort import natsorted
 import time
+from termcolor import colored
 
 import numpy as np
 
@@ -20,8 +22,12 @@ from rosgraph_msgs.msg import Clock
 
 from utils.msg_converter import np_to_pointcloud2, np_to_imu
 
+pointcloud_topic = "/ouster_points"
+imu_topic = "/imu/data"
+img_topic = "/image_raw"
 
-def get_parser():
+
+def get_args():
     parser = argparse.ArgumentParser(description="Publish raw data of CODa")
     parser.add_argument(
         "-d",
@@ -30,26 +36,36 @@ def get_parser():
         default="/home/dongmyeong/Projects/AMRL/CODa",
         help="Path to the dataset",
     )
-    parser.add_argument("-s", "--sequence", type=int, default=0, help="Sequence number")
+    parser.add_argument("-s", "--seq", type=int, default=0, help="Sequence number")
     parser.add_argument(
-        "--pointcloud_topic",
-        type=str,
-        default="/velodyne_points",
-        help="Pointcloud topic name",
+        "--clock",
+        action="store_true",
+        help="Publish clock data",
     )
     parser.add_argument(
-        "--imu_topic",
-        type=str,
-        default="/imu/data",
-        help="IMU topic name",
+        "--pc",
+        action="store_true",
+        help="Publish pointcloud data",
     )
     parser.add_argument(
-        "--img_topic",
-        type=str,
-        default="/image_raw",
-        help="Image topic name",
+        "--imu",
+        action="store_true",
+        help="Publish IMU data",
     )
-    return parser
+    parser.add_argument(
+        "--img",
+        action="store_true",
+        help="Publish image data",
+    )
+    parser.add_argument(
+        "-r",
+        "--rate",
+        type=float,
+        default=10,
+        help="Rate of publishing data",
+    )
+
+    return parser.parse_args()
 
 
 def process_pointcloud(bin_path, dt, frame_id, timestamp):
@@ -69,73 +85,98 @@ def process_pointcloud(bin_path, dt, frame_id, timestamp):
     t_values = np.linspace(0, dt, N_HORIZON, endpoint=False)
     t_expanded = np.repeat(t_values[None, :, None], N_RING, axis=0)
 
+    # placehold for reflectivity, ambient, range
+    reflectivity = np.zeros((N_RING, N_HORIZON, 1), dtype=np.float32)
+    ambient = np.zeros((N_RING, N_HORIZON, 1), dtype=np.float32)
+    # range is distance from the sensor to the point (mm)
+    rng = np.zeros((N_RING, N_HORIZON, 1), dtype=np.float32)
+    # for i in range(N_RING):
+    # for j in range(N_HORIZON):
+    # rng[i, j] = np.linalg.norm(points[i, j, :3])
+
     # Add ring and time information to points
-    points = np.dstack((points, ring_expanded, t_expanded))
-    points = points.reshape(-1, points.shape[-1])
+    points = np.dstack((points, ring_expanded, t_expanded, reflectivity, ambient, rng))
 
-    return np_to_pointcloud2(points, "x y z intensity ring time", frame_id, timestamp)
+    return np_to_pointcloud2(
+        points, "x y z intensity ring t reflectivity ambient range", frame_id, timestamp
+    )
 
 
-def main(args):
+def main():
+    args = get_args()
+    print(colored("Publishing raw data of CODa", "green"))
+    print(colored("NOTE: time unit is in micro-seconds", "yellow"))
+
     rospy.set_param("use_sim_time", True)
     rospy.init_node("CODa_raw_data_publisher")
 
     # Define Publishers
-    pc_pub = rospy.Publisher(args.pointcloud_topic, PointCloud2, queue_size=10)
-    img_pub = rospy.Publisher(args.img_topic, Image, queue_size=10)
-    imu_pub = rospy.Publisher(args.imu_topic, Imu, queue_size=2000)
+    pc_pub = rospy.Publisher(pointcloud_topic, PointCloud2, queue_size=10)
+    img_pub = rospy.Publisher(img_topic, Image, queue_size=10)
+    imu_pub = rospy.Publisher(imu_topic, Imu, queue_size=2000)
     clock_pub = rospy.Publisher("/clock", Clock, queue_size=10)
 
     # Define Paths
     dataset_path = pathlib.Path(args.dataset_path)
-    sequence = args.sequence
+    sequence = args.seq
 
     # Timestamps
     timestamp_file = dataset_path / "timestamps" / f"{sequence}.txt"
     timestamps = np.loadtxt(timestamp_file, dtype=np.float64)
 
     # Point Cloud Data
-    pc_root_dir = dataset_path / "3d_raw" / "os1" / str(sequence)
-    assert len(timestamps) == len(os.listdir(pc_root_dir))
+    if args.pc:
+        pc_root_dir = dataset_path / "3d_raw" / "os1" / str(sequence)
+        assert len(timestamps) == len(os.listdir(pc_root_dir))
 
     # Image Data
-    img_root_dir = dataset_path / "2d_rect" / "cam0" / str(sequence)
-    assert len(timestamps) == len(os.listdir(img_root_dir))
+    if args.img:
+        img_root_dir = dataset_path / "2d_raw" / "cam0" / str(sequence)
+        img2d_root_dir = dataset_path / "2d_raw" / "cam1" / str(sequence)
+        img_files = natsorted(os.listdir(img_root_dir))
+        img2d_files = natsorted(os.listdir(img2d_root_dir))
+        assert len(img_files) == len(img2d_files), f"{len(img_files)} != {len(img2d_files)}"
+        assert len(timestamps) == len(img_files), f"{len(timestamps)} != {len(img_files)}"
 
     # IMU Data
-    imu_file = dataset_path / "poses" / "imu" / f"{sequence}.txt"
-    imu_np = np.fromfile(imu_file, sep=" ").reshape(-1, 11)
+    if args.imu:
+        imu_file = dataset_path / "poses" / "imu" / f"{sequence}.txt"
+        imu_np = np.fromfile(imu_file, sep=" ").reshape(-1, 11)
 
     # Main Loop
     imu_last_idx = 0
     for frame, ts in tqdm(enumerate(timestamps), total=len(timestamps), miniters=1):
+        t1 = time.time()
+        # timestamp
+        timestamp = rospy.Time.from_sec(ts)
+        clock_pub.publish(timestamp)
+
         # Publish IMU
-        while imu_np[imu_last_idx][0] < ts:
+        while args.imu and imu_np[imu_last_idx][0] < ts:
             imu_timestamp = rospy.Time.from_sec(imu_np[imu_last_idx][0])
             imu_msg = np_to_imu(imu_np[imu_last_idx][1:], "imu_link", imu_timestamp)
             imu_pub.publish(imu_msg)
             imu_last_idx += 1
 
-        # timestamp for image and pointcloud
-        timestamp = rospy.Time.from_sec(ts)
-        clock_pub.publish(timestamp)
-
         # Publish Image
-        img_file = img_root_dir / f"2d_rect_cam0_{sequence}_{frame}.jpg"
-        image = cv2.imread(str(img_file), cv2.IMREAD_COLOR)
-        img_msg = CvBridge().cv2_to_imgmsg(image)
-        img_msg.header.stamp = timestamp
-        img_pub.publish(img_msg)
+        if args.img:
+            image_file = img_root_dir / img_files[frame]
+            image = cv2.imread(str(image_file), cv2.IMREAD_COLOR)
+            img_msg = CvBridge().cv2_to_imgmsg(image)
+            img_msg.header.stamp = timestamp
+            img_pub.publish(img_msg)
 
         # Publish Point Cloud
-        dt = timestamps[frame + 1] - ts if (frame < len(timestamps) - 1) else 0.1
-        pc_file = pc_root_dir / f"3d_raw_os1_{sequence}_{frame}.bin"
-        pc_msg = process_pointcloud(pc_file, dt, "base_link", timestamp)
-        pc_pub.publish(pc_msg)
+        if args.pc:
+            dt = timestamps[frame + 1] - ts if (frame < len(timestamps) - 1) else 0.1
+            dt = dt * 1e6  # convert to micro-seconds
+            pc_file = pc_root_dir / f"3d_raw_os1_{sequence}_{frame}.bin"
+            pc_msg = process_pointcloud(pc_file, dt, "base_link", timestamp)
+            pc_pub.publish(pc_msg)
 
-        time.sleep(0.1) # for Sim time
+        t2 = time.time()
+        time.sleep(max(0, 1 / args.rate - (t2 - t1)))
 
 
 if __name__ == "__main__":
-    args = get_parser().parse_args()
-    main(args)
+    main()
