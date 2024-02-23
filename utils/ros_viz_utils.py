@@ -1,6 +1,6 @@
 """
 Author:      Dongmyeong Lee (domlee[at]utexas.edu)
-Date:        September 16, 2023
+Date:        Sep 16, 2023
 Description: ROS visualization helper functions
 """
 import rospy
@@ -10,7 +10,7 @@ from scipy.spatial.transform import Rotation
 from geometry_msgs.msg import Point, PoseStamped
 from visualization_msgs.msg import Marker, MarkerArray
 
-from helpers.geometry import get_corners_bbox_3d
+from .geometry import get_corners_bbox_3d
 
 
 def clear_marker_array(publisher: rospy.Publisher) -> None:

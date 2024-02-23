@@ -193,7 +193,7 @@ def main(args):
         for idx, bbox in enumerate(averaged_bboxes[class_name]):
             bbox_3d = {
                 "classId": class_name,
-                "instanceId": class_name + "_" + str(idx),
+                "instanceId": idx,
                 "cX": bbox[0],
                 "cY": bbox[1],
                 "cZ": bbox[2],

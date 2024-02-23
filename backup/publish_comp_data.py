@@ -123,11 +123,11 @@ def main(args):
 
         # Main Loop
         for pose in tqdm(pose_np, total=len(pose_np)):
-            # Get Pose
+            # Get frame index
             frame = np.searchsorted(timestamp_np, pose[0], side="left")
-            ts = rospy.Time.from_sec(pose[0])
 
             # Publish Clock
+            ts = rospy.Time.from_sec(pose[0])
             clock_pub.publish(ts)
 
             # Publish LiDAR Pose and Path

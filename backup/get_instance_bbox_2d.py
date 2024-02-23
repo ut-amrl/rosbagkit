@@ -44,7 +44,7 @@ from utils.ros_viz_utils import (
     clear_marker_array,
 )
 from utils.ros_utils import wait_for_subscribers
-from utils.math_utils import average_rpy, adjugate
+from utils.math_utils import average_rpy, solve_linear_quadratic
 from utils.coda_utils import load_extrinsic_matrix, load_camera_params
 
 # Frames
@@ -60,10 +60,10 @@ CLASSES = {
 }
 
 # Radius for KDTree Query
-RADIUS = 30.0
+RADIUS = 25.0
 
 
-def get_parser():
+def get_args():
     parser = argparse.ArgumentParser(description="Get instance 2D bounding box")
     parser.add_argument(
         "-d",
@@ -104,68 +104,7 @@ def get_parser():
         default="/image",
         help="Image topic name",
     )
-    return parser
-
-
-def solve_linear_quadratic(G: np.ndarray, l: np.ndarray) -> np.ndarray:
-    """
-    Solve linear-quadratic equation
-    Args:
-        G: (3, 3) Dual Conic Matrix (adjugate of Conic Matrix)
-        l: (3,) Linear Term (ax + by + c)
-    Returns:
-        intersection: (N, 2) Intersection Points
-    """
-    # If l is tangent to the conic there are only one intersection
-    if np.isclose(l @ G @ l.T, 0.0):
-        q = np.dot(G, l)
-        q = q[:2] / q[2]
-        return q
-
-    # If l is not intersecting with the conic
-    if l @ G @ l.T < 0.0:
-        return np.empty((0, 2))
-
-    a = G[0, 0]
-    b = G[1, 1]
-    c = G[0, 1]
-    d = G[0, 2]
-    e = G[1, 2]
-    f = G[2, 2]
-
-    p = np.dot(G, l)  # [u, v, w]
-    u = p[0]
-    v = p[1]
-    w = p[2]
-
-    k_0 = a * w**2 - 2 * d * u * w + f * u**2
-    k_1 = -2 * (c * w**2 - w * (d * v + e * u) + f * u * v)
-    k_2 = w**2 * (b - a) + 2 * w * (d * u - e * v) + f * (v**2 - u**2)
-
-    k_3 = (2 * k_0 + k_2) / np.sqrt(k_1**2 + k_2**2)
-    k_3 = np.clip(k_3, -1.0, 1.0)
-
-    phi_1 = np.arctan2(k_1, k_2) / 2 - np.arcsin(k_3) / 2 - np.pi / 4
-    phi_2 = np.arctan2(k_1, k_2) / 2 + np.arcsin(k_3) / 2 + np.pi / 4
-
-    q_1 = np.array(
-        [
-            (c * w - d * v) * np.cos(phi_1) + (d * u - a * w) * np.sin(phi_1),
-            (b * w - e * v) * np.cos(phi_1) + (e * u - c * w) * np.sin(phi_1),
-            (e * w - f * v) * np.cos(phi_1) + (f * u - d * w) * np.sin(phi_1),
-        ]
-    )
-    q_2 = np.array(
-        [
-            (c * w - d * v) * np.cos(phi_2) + (d * u - a * w) * np.sin(phi_2),
-            (b * w - e * v) * np.cos(phi_2) + (e * u - c * w) * np.sin(phi_2),
-            (e * w - f * v) * np.cos(phi_2) + (f * u - d * w) * np.sin(phi_2),
-        ]
-    )
-
-    q_1 = q_1[:2] / q_1[2]
-    q_2 = q_2[:2] / q_2[2]
-    return np.array([q_1, q_2])
+    return parser.parse_args()
 
 
 def get_bbox_2d(
@@ -199,17 +138,22 @@ def get_bbox_2d(
 
     # Check whether 3D Bounding Box is in front of the camera
     centroid_cam = np.dot(extrinsic, np.append(bbox_3d[:3], 1.0))[:3]
-    if centroid_cam[2] < 1e-3:
+    if centroid_cam[2] < 1e-6:
         return None, None
 
     # Count Points in 3D Bounding Box
     bbox_3d_margin = bbox_3d.copy()
     bbox_3d_margin[3:5] += 1.0  # Add margin to length and width
+    bbox_3d_margin[5] -= 0.2  # Add margin to height
     points_in_bbox = filter_points_inside_bbox_3d(pointcloud, bbox_3d_margin)
 
     # bbox is not visible
-    if len(points_in_bbox) < 50:
+    if len(points_in_bbox) < 30:
         return None, None
+
+    # Modify centroid (cX, cY) to be the average of points in bbox
+    centroid = np.mean(points_in_bbox[:, :2], axis=0)
+    bbox_3d[:2] = centroid
 
     # Get Ellipsoid from 3D Bounding Box
     rot = R.from_euler("xyz", bbox_3d[6:9]).as_matrix()
@@ -230,6 +174,11 @@ def get_bbox_2d(
     # 1. Get Extrema of Ellipsoid
     x_extrema = np.roots([G[2, 2], -2 * G[0, 2], G[0, 0]])
     y_extrema = np.roots([G[2, 2], -2 * G[1, 2], G[1, 1]])
+    x_extrema = np.real(x_extrema[np.isreal(x_extrema)])
+    y_extrema = np.real(y_extrema[np.isreal(y_extrema)])
+    if len(x_extrema) == 0 or len(y_extrema) == 0:
+        return None, None
+
     x_min, x_max = np.min(x_extrema), np.max(x_extrema)
     y_min, y_max = np.min(y_extrema), np.max(y_extrema)
 
@@ -260,23 +209,22 @@ def get_bbox_2d(
 
     # get points inside the image
     points = np.vstack((extrema, intersections))
-    points = points[~np.isnan(points).any(axis=1) & np.isreal(points).all(axis=1)]
-    # Adjusting values to be within image
-    points[:, 0] = np.where(np.isclose(points[:, 0], 0, atol=1e-3), 0, points[:, 0])
-    points[:, 0] = np.where(np.isclose(points[:, 0], w, atol=1e-3), w, points[:, 0])
-    points[:, 1] = np.where(np.isclose(points[:, 1], 0, atol=1e-3), 0, points[:, 1])
-    points[:, 1] = np.where(np.isclose(points[:, 1], h, atol=1e-3), h, points[:, 1])
+    points = points[~np.isnan(points).any(axis=1) & np.isreal(points).all()]
+    # points[:, 0] = np.where(np.isclose(points[:, 0], 0, atol=1e-3), 0, points[:, 0])
+    # points[:, 0] = np.where(np.isclose(points[:, 0], w, atol=1e-3), w, points[:, 0])
+    # points[:, 1] = np.where(np.isclose(points[:, 1], 0, atol=1e-3), 0, points[:, 1])
+    # points[:, 1] = np.where(np.isclose(points[:, 1], h, atol=1e-3), h, points[:, 1])
+    points[:, 0] = np.clip(points[:, 0], 0, w)
+    points[:, 1] = np.clip(points[:, 1], 0, h)
 
     points = points[
-        ~np.isnan(points).any(axis=1)
-        & np.isreal(points).all(axis=1)
-        & (points[:, 0] >= 0)
+        (points[:, 0] >= 0)
         & (points[:, 0] <= w)
         & (points[:, 1] >= 0)
         & (points[:, 1] <= h)
     ]
 
-    if len(points) == 0:
+    if len(points) < 3:
         return None, None
 
     bbox_2d = np.array(
@@ -310,17 +258,8 @@ def process_bboxes_frame(
     drawn_bboxes = []
     # Draw Bounding Box
     for instance_id, bbox_2d, _ in bbox_frame:
-        # Check if bbox is occluded or too small
-        if (
-            any(
-                compute_overlap(bbox_2d, drawn_bbox) > 0.5
-                for _, drawn_bbox in drawn_bboxes
-            )
-            or bbox_2d[2] - bbox_2d[0] < 40 # dx
-            or bbox_2d[3] - bbox_2d[1] < 40 # dy
-            or bbox_2d[2] < 100
-            or bbox_2d[0] > img.shape[1] - 100
-            or (bbox_2d[2] - bbox_2d[0]) * (bbox_2d[3] - bbox_2d[1]) < 600
+        if any(
+            compute_overlap(bbox_2d, drawn_bbox) > 0.5 for _, drawn_bbox in drawn_bboxes
         ):
             continue
 
@@ -349,21 +288,24 @@ def process_bboxes_frame(
         )
         drawn_bboxes.append((instance_id, bbox_2d))
 
-    # # Save Bounding Box Information
-    # if output_file is not None:
-        # os.makedirs(os.path.dirname(output_file), exist_ok=True)
-        # with open(output_file, "w") as f:
-            # for (
-                # instance_id,
-                # bbox_2d,
-            # ) in drawn_bboxes:
-                # class_name, instance_id = instance_id.split("_")
-                # f.write(
-                    # f"{class_name} {instance_id} {bbox_2d[0]} {bbox_2d[1]} {bbox_2d[2]} {bbox_2d[3]}\n"
-                # )
+    # Save Bounding Box Information
+    if output_file is not None:
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        with open(output_file, "w") as f:
+            for (
+                instance_id,
+                bbox_2d,
+            ) in drawn_bboxes:
+                class_name, instance_id = instance_id.split("_")
+                f.write(
+                    f"{class_name} {instance_id} {bbox_2d[0]} {bbox_2d[1]} {bbox_2d[2]} {bbox_2d[3]}\n"
+                )
 
 
-def main(args):
+def main():
+    args = get_args()
+
+    # ROS Initialization
     rospy.set_param("use_sim_time", True)
     rospy.init_node("CODa_instance_2d_bbox_getter", anonymous=True)
 
@@ -586,5 +528,4 @@ def main(args):
 
 
 if __name__ == "__main__":
-    args = get_parser().parse_args()
-    main(args)
+    main()

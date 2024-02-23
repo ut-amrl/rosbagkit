@@ -3,15 +3,14 @@ Author:      Dongmyeong Lee (domlee[at]utexas.edu)
 Date:        Nov 21, 2023
 Description: ROS utility functions
 """
-
 import time
-from typing import List, Union
+from typing import Union
 
 import rospy
 
 
 def wait_for_subscribers(
-    publishers: Union[rospy.Publisher, List[rospy.Publisher]],
+    publishers: Union[rospy.Publisher, list[rospy.Publisher]],
     timeout: rospy.Duration = None,
 ) -> bool:
     if not isinstance(publishers, list):

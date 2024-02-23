@@ -1,6 +1,6 @@
 """
 Author:      Dongmyeong (domlee[at]utexas.edu)
-Date:        September 23, 2023
+Date:        Sep 23, 2023
 Description: A collection of image utility functions.
 """
 import os
@@ -80,81 +80,6 @@ def ratio_within_image(
     bbox_area = (x2 - x1) * (y2 - y1)
 
     return overlap_area / bbox_area if not np.isclose(bbox_area, 0) else 0
-
-
-# def clip_line_with_image_size(
-# p1: tuple[int, int], p2: tuple[int, int], image_size: tuple[int, int]
-# ) -> tuple[Optional[tuple[int, int]], Optional[tuple[int, int]]]:
-# """
-# Clip a line with the image size.
-
-# Args:
-# p1: A tuple of (x, y) representing the first point.
-# p2: A tuple of (x, y) representing the second point.
-# image_size: A tuple of (width, height) representing the image size.
-
-# Returns:
-# A tuple of points (x, y) representing the clipped line.
-# """
-# x1, y1 = p1
-# x2, y2 = p2
-# width, height = image_size
-
-# is_p1_inside = x1 >= 0 and x1 < width and y1 >= 0 and y1 < height
-# is_p2_inside = x2 >= 0 and x2 < width and y2 >= 0 and y2 < height
-
-# if is_p1_inside and is_p2_inside:
-# return p1, p2
-
-# if not is_p1_inside and not is_p2_inside:
-# return (None, None)
-
-# boundaries = [
-# ((0, 0), (width, 0)),
-# ((width, 0), (width, height)),
-# ((width, height), (0, height)),
-# ((0, height), (0, 0)),
-# ]
-
-# for boundary in boundaries:
-# point = line_segment_intersection_2d(p1, p2, boundary[0], boundary[1])
-
-# if point[0] is not None and point[1] is not None:
-# return (p1, point) if is_p1_inside else (point, p2)
-
-# return (None, None)
-
-
-def crop_2d_bbox(
-    bbox: tuple[int, int, int, int], image_size: tuple[int, int]
-) -> tuple[tuple[int, int, int, int], float]:
-    """
-    Crop a 2D bounding box with the image boundary.
-
-    Args:
-        bbox: A tuple of (x1, y1, x2, y2) representing
-              the top-left and bottom-right of the bbox.
-        image_size: A tuple of (width, height) representing the image size.
-
-    Returns:
-        x1, y1, x2, y2: The cropped bounding box.
-        cropped_ratio: The ratio of the cropped area to the original area.
-    """
-    x1, y1, x2, y2 = bbox
-    width, height = image_size
-
-    valid_x1 = np.clip(x1, 0, width)
-    valid_y1 = np.clip(y1, 0, height)
-    valid_x2 = np.clip(x2, 0, width)
-    valid_y2 = np.clip(y2, 0, height)
-    valid_bbox = (valid_x1, valid_y1, valid_x2, valid_y2)
-
-    bbox_area = (x2 - x1) * (y2 - y1)
-    valid_bbox_area = (valid_x2 - valid_x1) * (valid_y2 - valid_y1)
-    cropped_area = bbox_area - valid_bbox_area
-    cropped_ratio = np.clip(cropped_area / bbox_area, 0, 1)
-
-    return valid_bbox, cropped_ratio
 
 
 def save_cropped_image_with_margin(

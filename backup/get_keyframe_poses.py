@@ -1,12 +1,17 @@
+"""
+Author: Donmgmyeong Lee (domlee[at]utexas.edu)
+Date:   Jan 12, 2024
+Description: Get the keyframe poses from the interactive_slam output
+"""
 import argparse
 from pathlib import Path
 from natsort import natsorted
 from bisect import bisect_left, bisect_right
 from tqdm import tqdm
 
-import numpy as np
+from scipy.spatial.transform import Rotation as R
 
-from utils.coda_utils import load_keyframe_pose
+import numpy as np
 
 
 def get_parser():
@@ -25,6 +30,38 @@ def get_parser():
         help="Path to the dataset directory",
     )
     return parser
+
+
+def load_keyframe_pose(keyframe_pose_file: str) -> np.ndarray:
+    """
+    Load estimated pose from a keyframe file (.data) from interactive_slam
+
+    Args:
+        keyframe_pose_file: Path to the (.data) file containing the estimated pose.
+
+    Returns:
+        keyframe_pose: (8,) estimated pose (timestamp, x, y, z, qw, qx, qy, qz)
+    """
+    with open(keyframe_pose_file, "r") as f:
+        lines = f.readlines()
+
+        # timestamp
+        timestamp_line = lines[0].strip().split(" ")
+        timestamp = float(timestamp_line[1])
+
+        # estimated pose (SE3)
+        pose_lines = lines[2:6]
+        keyframe_pose_matrix = np.array(
+            [list(map(float, line.split())) for line in pose_lines]
+        )
+        r = R.from_matrix(keyframe_pose_matrix[:3, :3])
+
+        # estimated pose (timestamp, x, y, z, qw, qx, qy, qz)
+        keyframe_pose = np.zeros(8)
+        keyframe_pose[0] = timestamp
+        keyframe_pose[1:4] = keyframe_pose_matrix[:3, 3]
+        keyframe_pose[4:] = r.as_quat()[[3, 0, 1, 2]]
+    return keyframe_pose
 
 
 def get_relevant_keyframes(

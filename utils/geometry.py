@@ -8,7 +8,7 @@ import cv2
 from scipy.spatial.transform import Rotation as R
 from typing import Optional
 
-from helpers.image_utils import compute_iou
+from .image_utils import compute_iou
 
 
 def get_corners_bbox_3d(bbox_3d: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -167,7 +167,6 @@ def project_points_3d_to_2d(
     return points_image, depths
 
 
-
 def filter_points_inside_bbox_3d(points: np.ndarray, bbox_3d: np.ndarray) -> np.ndarray:
     """
     Filter out points that are inside the 3D bounding box.
@@ -194,7 +193,7 @@ def filter_points_inside_bbox_3d(points: np.ndarray, bbox_3d: np.ndarray) -> np.
         & (transformed_points[:, 0] <= hl)
         & (transformed_points[:, 1] >= -hw)
         & (transformed_points[:, 1] <= hw)
-        & (transformed_points[:, 2] >= -hh + 0.15)
+        & (transformed_points[:, 2] >= -hh)
         & (transformed_points[:, 2] <= hh)
     )
     return points[mask_inside]

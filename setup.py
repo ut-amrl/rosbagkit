@@ -11,7 +11,7 @@ setup(
         "numpy",
         "scipy",
         "pyyaml",
-        "sckikit-learn",
+        "scikit-learn",
         "matplotlib",
         "pandas",
         "tqdm",

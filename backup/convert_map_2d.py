@@ -21,23 +21,17 @@ from utils.msg_converter import np_to_pointcloud2
 def get_parser():
     parser = argparse.ArgumentParser(description="Convert map file to 2D for ENML")
     parser.add_argument(
-        "--map",
+        "--dataset",
         type=str,
-        default="/home/dongmyeong/Projects/AMRL/CODa/correction/ut_campus_downsampled.pcd",
-        help="Path to map file (.pcd)",
+        default="/home/dongmyeong/Projects/AMRL/CODa",
+        help="Path to dataset",
     )
     parser.add_argument(
-        "--poses",
+        "--output",
         type=str,
-        default="/home/dongmyeong/Projects/AMRL/CODa/poses/keyframe",
-        help="Path to poses file (.txt)",
+        default="/home/dongmyeong/Projects/AMRL/CODa/ut_campus_2d.pcd",
+        help="Path to output file",
     )
-    parser.add_argument(
-            "--dataset",
-            type=str,
-            default="/home/dongmyeong/Projects/AMRL/CODa",
-            help="Path to dataset",
-            )
     parser.add_argument(
         "--min_height",
         type=float,
@@ -79,7 +73,7 @@ def main(args):
     pointcloud_2d = np.zeros((0, 3))
 
     # Main loop
-    pose_files = natsorted(Path(args.poses).glob("*.txt"))
+    pose_files = natsorted(Path(args.dataset).glob("poses/keyframe/*.txt"))
     for pose_file in pose_files:
         sequence = pose_file.stem.split("_")[0]
         pc_root_dir = Path(args.dataset) / "3d_comp/os1" / str(sequence)
@@ -129,8 +123,7 @@ def main(args):
     # Save point cloud
     pcd_2d = open3d.geometry.PointCloud()
     pcd_2d.points = open3d.utility.Vector3dVector(pointcloud_2d)
-    out_file = Path(args.map).parent / f"{Path(args.map).stem}_2d.pcd"
-    open3d.io.write_point_cloud(str(out_file), pcd_2d)
+    open3d.io.write_point_cloud(args.output, pcd_2d)
 
 
 if __name__ == "__main__":

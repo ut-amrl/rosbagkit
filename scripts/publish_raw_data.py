@@ -127,16 +127,17 @@ def main():
     # Point Cloud Data
     if args.pc:
         pc_root_dir = dataset_path / "3d_raw" / "os1" / str(sequence)
-        assert len(timestamps) == len(os.listdir(pc_root_dir))
+        pc_files = natsorted(os.listdir(pc_root_dir))
+        # assert len(timestamps) == len(pc_files), f"{len(timestamps)} != {len(pc_files)}"
 
     # Image Data
     if args.img:
         img_root_dir = dataset_path / "2d_raw" / "cam0" / str(sequence)
-        img2d_root_dir = dataset_path / "2d_raw" / "cam1" / str(sequence)
+        img2_root_dir = dataset_path / "2d_raw" / "cam1" / str(sequence)
         img_files = natsorted(os.listdir(img_root_dir))
-        img2d_files = natsorted(os.listdir(img2d_root_dir))
-        assert len(img_files) == len(img2d_files), f"{len(img_files)} != {len(img2d_files)}"
-        assert len(timestamps) == len(img_files), f"{len(timestamps)} != {len(img_files)}"
+        img2_files = natsorted(os.listdir(img2_root_dir))
+        # assert len(img_files) == len(img2_files)
+        # assert len(timestamps) == len(img_files)
 
     # IMU Data
     if args.imu:
@@ -170,7 +171,7 @@ def main():
         if args.pc:
             dt = timestamps[frame + 1] - ts if (frame < len(timestamps) - 1) else 0.1
             dt = dt * 1e6  # convert to micro-seconds
-            pc_file = pc_root_dir / f"3d_raw_os1_{sequence}_{frame}.bin"
+            pc_file = pc_root_dir / pc_files[frame]
             pc_msg = process_pointcloud(pc_file, dt, "base_link", timestamp)
             pc_pub.publish(pc_msg)
 
