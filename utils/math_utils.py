@@ -13,25 +13,37 @@ from manifpy import SO3, SO3Tangent
 
 def average_rpy(angles: np.ndarray, degrees: bool = False) -> np.ndarray:
     """
-    Average roll, pitch, yaw angles
-
-    Args:
-        angles: (N, 3) array of roll, pitch, yaw angles
-        degrees: if True, angles are in degrees otherwise radians
-
-    Returns:
-        average_angle: (3,) array of average roll, pitch, yaw angles
+    Average rotatmion matrix and compute SVD for the average rotation matrix
+    to represent geometric mean of rotation matrices
     """
-    xi_list = []
+    sum_R = np.zeros((3, 3))
     for angle in angles:
-        quaternion = R.from_euler("xyz", angle, degrees=degrees).as_quat()  # x, y, z, w
-        xi = SO3(quaternion).log().coeffs()
-        xi_list.append(xi)
+        sum_R += R.from_euler("xyz", angle, degrees=degrees).as_matrix()
+    U, _, Vt = np.linalg.svd(sum_R)
+    return R.from_matrix(U @ Vt).as_euler("xyz", degrees=degrees)
 
-    xi_avg = SO3Tangent(np.mean(xi_list, axis=0))
-    avg_quat = xi_avg.exp().quat()
 
-    return R.from_quat(avg_quat).as_euler("xyz", degrees=degrees)
+# def average_rpy(angles: np.ndarray, degrees: bool = False) -> np.ndarray:
+    # """
+    # Average roll, pitch, yaw angles
+
+    # Args:
+        # angles: (N, 3) array of roll, pitch, yaw angles
+        # degrees: if True, angles are in degrees otherwise radians
+
+    # Returns:
+        # average_angle: (3,) array of average roll, pitch, yaw angles
+    # """
+    # xi_list = []
+    # for angle in angles:
+        # quaternion = R.from_euler("xyz", angle, degrees=degrees).as_quat()  # x, y, z, w
+        # xi = SO3(quaternion).log().coeffs()
+        # xi_list.append(xi)
+
+    # xi_avg = SO3Tangent(np.mean(xi_list, axis=0))
+    # avg_quat = xi_avg.exp().quat()
+
+    # return R.from_quat(avg_quat).as_euler("xyz", degrees=degrees)
 
 
 def solve_linear_quadratic(G: np.ndarray, l: np.ndarray) -> np.ndarray:
