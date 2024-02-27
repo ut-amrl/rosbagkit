@@ -187,7 +187,7 @@ def get_args():
     args.image_dirs = {cam: args.dataset_dir / "2d_raw" / cam for cam in args.cams}
     args.calibration_dir = args.dataset_dir / "calibrations"
     args.global_bbox_dir = args.dataset_dir / "3d_bbox" / "global"
-    args.out_dir = args.dataset_dir / "annotations_tmp"
+    args.out_dir = args.dataset_dir / "annotations"
     return args
 
 
@@ -268,8 +268,8 @@ def refine_bbox_2d(
         drawn_instances: list of (class_name, instance_id, bbox_2d)
 
     Returns:
-        drawn_instances: list of (class_name, instance_id, bbox_2d)
-        segmentations: list of instances' segmentation (list of contours)
+        refined_instances: list of (class_name, instance_id, bbox_2d)
+        segmentations: list of contours
     """
     img = cv2.imread(image_file)
     SAM_PREDICTOR.set_image(cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
@@ -280,7 +280,8 @@ def refine_bbox_2d(
     masks, iou_preds, _ = SAM_PREDICTOR.predict_torch(
         point_coords=None, point_labels=None, boxes=boxes, multimask_output=False
     )
-
+    
+    refined_instances = []
     segmentations = []
 
     used_masks = np.zeros_like(masks[0].cpu().numpy().squeeze())
@@ -327,9 +328,10 @@ def refine_bbox_2d(
 
         # Update bbox and segmentation
         instance[2] = list(map(int, new_bbox))
+        refined_instances.append(instance)
         segmentations.append([c.ravel().tolist() for c in approxes])
 
-    return drawn_instances, segmentations
+    return refined_instances, segmentations
 
 
 def process_bboxes_frame(
@@ -378,6 +380,10 @@ def process_bboxes_frame(
         drawn_instances, segmentations = refine_bbox_2d(image_file, drawn_instances)
         if DEBUG:
             print("Refined drawn_instances", drawn_instances, segmentations)
+
+    # only save annotation if there is at least one instance
+    if len(drawn_instances) == 0:
+        return
 
     # Save Annotation to File
     frame_annotation = {"info": info, "instances": []}
