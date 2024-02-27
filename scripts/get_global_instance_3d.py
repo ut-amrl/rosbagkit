@@ -9,6 +9,7 @@ import argparse
 import json
 import jsbeautifier
 from tqdm import tqdm
+import time
 
 import numpy as np
 from scipy.spatial.transform import Rotation as R
@@ -16,11 +17,14 @@ from sklearn.cluster import DBSCAN
 
 import rospy
 from visualization_msgs.msg import Marker, MarkerArray
+from sensor_msgs.msg import PointCloud2
+import tf2_ros
 
 from utils.geometry import transform_bbox_3d
 from utils.ros_viz_utils import create_bbox_3d_marker, clear_marker_array
 from utils.ros_utils import wait_for_subscribers
 from utils.math_utils import average_rpy
+from utils.msg_converter import np_to_pointcloud2
 
 # fmt: off
 CLASSES = {
@@ -34,6 +38,8 @@ CLASSES = {
     "Emergency_Phone":    {"id": 7, "color": (0.5, 0.5, 0.5)},
 }
 # fmt: on
+
+PC_TOPIC = "/os_points"
 
 
 def get_args():
@@ -50,23 +56,31 @@ def get_args():
         "--sequences",
         nargs="+",
         type=int,
-        # default=[0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 16, 17, 18, 19, 20, 21],
-        default=[0],
+        default=[0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 16, 17, 18, 19, 20, 21],
+        # default=[0],
         help="Sequence ID",
     )
     parser.add_argument(
         "--ros",
         action="store_true",
-        help="Publish 3D Bounding Box as ROS Marker",
+        help="Publish 3D Bounding Box as ROS Marker for debug",
+    )
+    parser.add_argument(
+        "--rate",
+        type=float,
+        default=0,
+        help="Rate for publishing Pointcloud",
     )
 
     args = parser.parse_args()
 
     args.dataset_dir = Path(args.dataset)
-    args.pose_dir = args.dataset_dir / "poses"
+    # args.pose_dir = args.dataset_dir / "poses"
+    args.pose_dir = args.dataset_dir / "correct"
     args.timestamp_dir = args.dataset_dir / "timestamps"
     args.bbox_3d_dir = args.dataset_dir / "3d_bbox" / "os1"
     args.global_bbox_3d_dir = args.dataset_dir / "3d_bbox" / "global"
+    args.pc_dir = args.dataset_dir / "3d_comp" / "os1"
     return args
 
 
@@ -97,9 +111,8 @@ def cluster_average_bbox_3d(bboxes: np.ndarray, threshold: float = 1.5) -> np.nd
     for label in unique_labels:
         cluster_bboxes = bboxes[labels == label]
 
-        # # Skip if there is only one bbox
-        # if len(cluster_bboxes) < 3:
-        # continue
+        if len(cluster_bboxes) < 10:
+            continue
 
         avg_centroid_dim = np.mean(cluster_bboxes[:, :6], axis=0)
         avg_rpy = average_rpy(cluster_bboxes[:, 6:])
@@ -119,8 +132,7 @@ def load_3d_annotaions(pose: np.ndarray, bbox_3d_file: dict) -> np.ndarray:
     Returns:
         bboxes: (N, 9) array of 3D Bounding Box in Global Frame
     """
-    if not os.path.exists(bbox_3d_file):
-        return {class_name: np.empty((0, 9)) for class_name in CLASSES}
+    assert os.path.exists(bbox_3d_file)
 
     # Transformation Matrix from Global to LiDAR
     T_lg = np.eye(4)
@@ -150,30 +162,86 @@ def load_3d_annotaions(pose: np.ndarray, bbox_3d_file: dict) -> np.ndarray:
 def main():
     args = get_args()
 
+    # Visualize 3D Bounding Box annotation by frame
+    if args.ros:
+        rospy.init_node("CODa_3d_bbox_getter", anonymous=True)
+
+        # 3D Bounding Box Publisher for each class
+        instance_pubs = {
+            class_name: rospy.Publisher(
+                f"instance_3dbbox/{class_name}", MarkerArray, queue_size=1
+            )
+            for class_name in CLASSES
+        }
+        # Pointcloud Publisher
+        pc_pub = rospy.Publisher(PC_TOPIC, PointCloud2, queue_size=1)
+        wait_for_subscribers(list(instance_pubs.values()))
+
     # Accumulate 3D Bounding Box
     global_bboxes = {class_name: np.empty((0, 9)) for class_name in CLASSES}
     for sequence in args.sequences:
         pose_file = args.pose_dir / f"{sequence}.txt"
-        pose_np = np.loadtxt(pose_file, delimiter=" ").reshape(-1, 8)
+        pose_np = np.loadtxt(pose_file).reshape(-1, 8)
 
         timestamp_file = args.timestamp_dir / f"{sequence}.txt"
-        timestamp_np = np.loadtxt(timestamp_file, delimiter=" ")
+        timestamp_np = np.loadtxt(timestamp_file)
 
         # Data Path
         bbox_3d_root_dir = args.bbox_3d_dir / f"{sequence}"
 
         # Main Loop
-        print(f"Processing Sequence {sequence}")
+        print(f"Processing Sequence {sequence}, Total Frame: {len(pose_np)}")
         for pose in tqdm(pose_np, total=len(pose_np)):
+            # clear all marker
+            if args.ros:
+                for class_name in instance_pubs.keys():
+                    clear_marker_array(instance_pubs[class_name])
+
             frame = np.searchsorted(timestamp_np, pose[0], side="left")
-
             bbox_3d_file = bbox_3d_root_dir / f"3d_bbox_os1_{sequence}_{frame}.json"
-            bboxes = load_3d_annotaions(pose, bbox_3d_file)
+            if not os.path.exists(bbox_3d_file):
+                continue
 
+            # Load 3D Bounding Box
+            bboxes = load_3d_annotaions(pose, bbox_3d_file)
             global_bboxes = {
                 class_name: np.vstack([global_bboxes[class_name], bboxes[class_name]])
                 for class_name in global_bboxes.keys()
             }
+
+            # ROS Visualization
+            if args.ros:
+                # Publish Pointcloud
+                pc_file = (
+                    args.pc_dir / str(sequence) / f"3d_comp_os1_{sequence}_{frame}.bin"
+                )
+                if os.path.exists(pc_file):
+                    pc_np = np.fromfile(pc_file, dtype=np.float32).reshape(-1, 3)
+                    pc_np = np.hstack([pc_np, np.ones((pc_np.shape[0], 1))])
+
+                    pose_matrix = np.eye(4)
+                    pose_matrix[:3, 3] = pose[1:4]
+                    pose_matrix[:3, :3] = R.from_quat(pose[[5, 6, 7, 4]]).as_matrix()
+                    pc_np = pc_np @ pose_matrix.T
+
+                    pc_msg = np_to_pointcloud2(pc_np, "x y z intensity", "map")
+                    pc_pub.publish(pc_msg)
+
+                # Publish 3D Bounding Box for each class
+                for class_name in instance_pubs.keys():
+                    marker_array = MarkerArray()
+                    for idx, bbox in enumerate(bboxes[class_name]):
+                        bbox_marker = create_bbox_3d_marker(
+                            bbox_3d=bbox,
+                            frame_id="map",
+                            marker_id=idx,
+                            color=CLASSES[class_name]["color"],
+                        )
+                        marker_array.markers.append(bbox_marker)
+                    instance_pubs[class_name].publish(marker_array)
+                if args.rate > 0:
+                    time.sleep(1 / args.rate)
+
     print("Finished Accumulating 3D Bounding Box")
 
     # Get Averaged Bbox
@@ -190,7 +258,7 @@ def main():
         for idx, bbox in enumerate(averaged_bboxes[class_name]):
             instance = {
                 "id": idx,
-                "cX": 
+                "cX": bbox[0],
                 "cY": bbox[1],
                 "cZ": bbox[2],
                 "l": bbox[3],
@@ -209,18 +277,16 @@ def main():
 
     # ROS Visualization
     if args.ros:
-        rospy.init_node("CODa_global_3d_bbox_getter", anonymous=True)
-
         # 3D Bounding Box Publisher for each class
-        object_pubs = {
+        global_pubs = {
             class_name: rospy.Publisher(
-                f"instance_3dbbox/{class_name}", MarkerArray, queue_size=1
+                f"global_3dbbox/{class_name}", MarkerArray, queue_size=1
             )
             for class_name in CLASSES
         }
-        wait_for_subscribers(list(object_pubs.values()))
+        wait_for_subscribers(list(global_pubs.values()))
 
-        for class_name in object_pubs.keys():
+        for class_name in global_pubs.keys():
             marker_array = MarkerArray()
             for idx, bbox in enumerate(averaged_bboxes[class_name]):
                 bbox_marker = create_bbox_3d_marker(
@@ -230,8 +296,8 @@ def main():
                     color=CLASSES[class_name]["color"],
                 )
                 marker_array.markers.append(bbox_marker)
-            clear_marker_array(object_pubs[class_name])
-            object_pubs[class_name].publish(marker_array)
+            clear_marker_array(global_pubs[class_name])
+            global_pubs[class_name].publish(marker_array)
 
 
 if __name__ == "__main__":

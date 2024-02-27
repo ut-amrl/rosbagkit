@@ -12,7 +12,7 @@ from utils.msg_converter import pcd_to_pointcloud2
 from utils.ros_utils import wait_for_subscribers
 
 
-def get_parser():
+def get_args():
     parser = argparse.ArgumentParser(description="Publishes a .pcd file")
     parser.add_argument(
         "--pcd",
@@ -32,10 +32,12 @@ def get_parser():
         default="map",
         help="Frame ID of the point cloud",
     )
-    return parser
+    return parser.parse_args()
 
 
-def main(args):
+def main():
+    args = get_args()
+
     rospy.init_node("pcd_publisher", anonymous=True)
 
     pcd_pub = rospy.Publisher(args.topic, PointCloud2, queue_size=1, latch=True)
@@ -47,5 +49,4 @@ def main(args):
 
 
 if __name__ == "__main__":
-    args = get_parser().parse_args()
-    main(args)
+    main()

@@ -8,19 +8,22 @@ from pathlib import Path
 from natsort import natsorted
 from bisect import bisect_left, bisect_right
 from tqdm import tqdm
+import time
 
 from scipy.spatial.transform import Rotation as R
 
 import numpy as np
 
 
-def get_parser():
+def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--keyframe_poses_dir",
+        "--graph_dir",
         type=str,
-        default="/home/dongmyeong/Projects/AMRL/CODa/correction/map/ut_campus",
-        help="Path to the keyframe poses directory (output of interactive_slam)",
+        # default="/home/dongmyeong/Projects/AMRL/CODa/interactive_slam/dense_keyframe/0",
+        default="/home/dongmyeong/Projects/AMRL/CODa/interactive_slam/global_keyframe/final_bkp",
+        # default="/home/dongmyeong/Projects/AMRL/CODa/interactive_slam/odom/",
+        help="Path to the graph directory (output of interactive_slam)",
     )
     parser.add_argument(
         "-d",
@@ -29,7 +32,13 @@ def get_parser():
         default="/home/dongmyeong/Projects/AMRL/CODa",
         help="Path to the dataset directory",
     )
-    return parser
+    args = parser.parse_args()
+    args.dataset_dir = Path(args.dataset)
+    args.timestamps_dir = args.dataset_dir / "timestamps"
+    args.output_dir = Path(args.dataset) / "poses" / "dense_keyframe"
+    # args.output_dir = Path(args.dataset) / "poses" / "global_keyframe"
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    return args
 
 
 def load_keyframe_pose(keyframe_pose_file: str) -> np.ndarray:
@@ -61,11 +70,12 @@ def load_keyframe_pose(keyframe_pose_file: str) -> np.ndarray:
         keyframe_pose[0] = timestamp
         keyframe_pose[1:4] = keyframe_pose_matrix[:3, 3]
         keyframe_pose[4:] = r.as_quat()[[3, 0, 1, 2]]
+
     return keyframe_pose
 
 
 def get_relevant_keyframes(
-    keyframes: np.array, timestamps: np.array, max_time_diff: int = 100
+    keyframes: np.array, timestamps: np.array, max_time_diff: float = 1.0
 ) -> np.array:
     """
     Get the relevant keyframes that are within the timestamps
@@ -93,10 +103,12 @@ def get_relevant_keyframes(
     return keyframes[l_idx:u_idx]
 
 
-def main(args):
+def main():
+    args = get_args()
+
     # Get the paths to the pose files and the timestamps
-    keyframes_files = list(Path(args.keyframe_poses_dir).glob("[0-9]*/data"))
-    print("Load keyframe poses from: ", args.keyframe_poses_dir)
+    keyframes_files = list(Path(args.graph_dir).glob("[0-9]*/data"))
+    print("Load keyframe poses from: ", args.graph_dir)
 
     # Get the keyframe poses
     keyframes = np.array(
@@ -105,11 +117,11 @@ def main(args):
             key=lambda x: x[0],  # sort by timestamp
         )
     )
-    print("Keyframes: ", keyframes.shape)
+    print("Keyframes: ", keyframes.shape[0])
 
-    dataset_path = Path(args.dataset)
-    ts_files = natsorted((dataset_path / "timestamps").glob("*.txt"))
+    ts_files = natsorted(args.timestamps_dir.glob("*.txt"))
 
+    i = 0
     for ts_file in ts_files:
         timestamps = np.loadtxt(ts_file)
 
@@ -120,15 +132,24 @@ def main(args):
             continue
 
         # Save the relevant keyframes
-        output_dir = dataset_path / f"poses/keyframe/{ts_file.stem}.txt"
-        with open(output_dir, "w") as f:
+        output_file = args.output_dir / f"{ts_file.stem}.txt"
+        times = set()
+        with open(output_file, "w") as f:
             for keyframe in relevant_keyframes:
-                ts = keyframe[0]
-                pose = keyframe[1:]
-                f.write(f"{ts:.6f} " + " ".join(f"{p:.8f}" for p in pose) + "\n")
-        print(f"Saved {output_dir}")
+                # ts of odom is last packet ts, so we deduct 1 to get the ts of the frame
+                frame = np.searchsorted(timestamps, keyframe[0], side="left") - 1
+                ts = timestamps[frame]
+
+                if ts in times:
+                    continue # sanity check
+                times.add(ts)
+
+                f.write(
+                    f"{ts:.6f} " + " ".join(f"{p:.8f}" for p in keyframe[1:]) + "\n"
+                )
+        print(f"Saved {output_file}")
+        i += 1
 
 
 if __name__ == "__main__":
-    args = get_parser().parse_args()
-    main(args)
+    main()

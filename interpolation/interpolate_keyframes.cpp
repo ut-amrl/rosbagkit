@@ -19,13 +19,13 @@
 
 DEFINE_int32(seq, 0, "The sequence number.");
 DEFINE_string(input_kf_dir,
-              "/home/dongmyeong/Projects/AMRL/CODa/poses/keyframe/global/",
+              "/home/dongmyeong/Projects/AMRL/CODa/poses/global_keyframe/",
               "The input keyframe poses.");
 DEFINE_string(input_odom_dir,
-              "/home/dongmyeong/Projects/AMRL/CODa/poses/keyframe/local/",
+              "/home/dongmyeong/Projects/AMRL/CODa/poses/dense_keyframe/",
               "The input odometry poses.");
 DEFINE_string(output_dir,
-              "/home/dongmyeong/Projects/AMRL/CODa/poses/keyframe/",
+              "/home/dongmyeong/Projects/AMRL/CODa/poses/",
               "The output poses.");
 
 namespace ut_amrl::slam {
@@ -48,6 +48,9 @@ RelativePose3d<T> getRelativePose(const T id_begin,
 
   // Set the information matrix for the relative pose.
   relative_pose.sqrt_information = Eigen::Matrix<T, 6, 6>::Identity() * weight;
+  relative_pose.sqrt_information(3, 3) *= 30.0;
+  relative_pose.sqrt_information(4, 4) *= 30.0;
+  relative_pose.sqrt_information(5, 5) *= 30.0;
 
   return relative_pose;
 }
@@ -65,44 +68,14 @@ void buildInterpolationOptimizationProblem(const MapOfPoses3d<T>& kf_poses,
     return;
   }
 
-  // #1
-  // Linear interpolation of the keyframe pose with timestamps in the odometry
-  // as initial guess for the pose graph optimization.
+  // #1 Initialize the poses with the odometry poses.
   for (const auto& [timestamp, odom_pose] : odom_poses) {
     auto kf_up_it = kf_poses.lower_bound(timestamp);
-    if (kf_up_it == kf_poses.begin() && timestamp < kf_up_it->first) {
-      // The timestamp is smaller than the first keyframe timestamp.
-      // Use the first keyframe pose as the initial guess.
-      poses->emplace(timestamp, kf_up_it->second);
-    } else if (kf_up_it == kf_poses.end()) {
-      // The timestamp is larger than the last keyframe timestamp.
-      // Use the last keyframe pose as the initial guess.
-      poses->emplace(timestamp, std::prev(kf_up_it)->second);
-    } else if (timestamp == kf_up_it->first) {
+    if (timestamp == kf_up_it->first) {
       // The timestamp matches the keyframe timestamp exactly.
       poses->emplace(timestamp, kf_up_it->second);
     } else {
-      // Linear interpolation of the keyframe pose with timestamps in the odometry.
-      auto kf_lo_it = std::prev(kf_up_it);
-
-      const auto& kf_lower = kf_lo_it->second;
-      const auto& kf_upper = kf_up_it->second;
-
-      // Get the interpolation ratio.
-      double t = (timestamp - kf_lo_it->first) / (kf_up_it->first - kf_lo_it->first);
-
-      // Linear interpolation of the keyframe pose.
-      manif::SE3d kf_lower_SE3(kf_lower.p, kf_lower.q);
-      manif::SE3d kf_upper_SE3(kf_upper.p, kf_upper.q);
-
-      // xi = log(X_lo_it^{-1} * X_up_it) (ref: https://github.com/artivis/manif)
-      manif::SE3Tangentd xi = kf_upper_SE3 - kf_lower_SE3;
-
-      // X_interp = X_lo_it * exp(t * xi)
-      manif::SE3d kf_interp_SE3 = kf_lower_SE3 + t * xi;
-      Pose3d kf_pose_interp(kf_interp_SE3.translation(), kf_interp_SE3.quat());
-
-      poses->emplace(timestamp, kf_pose_interp);
+      poses->emplace(timestamp, odom_pose);
     }
   }
 

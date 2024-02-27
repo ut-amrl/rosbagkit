@@ -3,6 +3,9 @@ Author:      Dongmyeong Lee (domlee[at]utexas.edu)
 Date:        Sep 16, 2023
 Description: ROS visualization helper functions
 """
+import os
+import sys
+
 import rospy
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -10,19 +13,16 @@ from scipy.spatial.transform import Rotation
 from geometry_msgs.msg import Point, PoseStamped
 from visualization_msgs.msg import Marker, MarkerArray
 
-from .geometry import get_corners_bbox_3d
+sys.path.append(os.path.join(os.path.dirname(__file__)))
+from geometry import get_corners_bbox_3d
 
 
 def clear_marker_array(publisher: rospy.Publisher) -> None:
-    """
-    Clear all markers from the publisher's topic
-
-    Args:
-        publisher: a publisher to a marker topic
-    """
-    delete_all_marker = Marker(id=0, ns="delete_markerarray", action=Marker.DELETEALL)
-    publisher.publish(MarkerArray([delete_all_marker]))
-    return
+    """Clear all markers from the publisher's topic"""
+    delete_all_marker = Marker()
+    delete_all_marker.action = Marker.DELETEALL
+    delete_marker_array = MarkerArray(markers=[delete_all_marker])
+    publisher.publish(delete_marker_array)
 
 
 def create_bbox_3d_marker(

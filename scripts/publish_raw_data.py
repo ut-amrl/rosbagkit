@@ -64,7 +64,6 @@ def get_args():
         default=10,
         help="Rate of publishing data",
     )
-
     return parser.parse_args()
 
 

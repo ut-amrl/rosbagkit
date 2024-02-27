@@ -112,7 +112,7 @@ def get_args():
         "--sequences",
         nargs="+",
         type=int,
-        # default=[0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 16, 17, 18, 19, 20, 21],
+        # default=[0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 16, 17, 18, 19, 20, 21, 22],
         default=[0],
         help="Sequence ID",
     )
@@ -181,9 +181,9 @@ def get_args():
 
     # Directories
     args.dataset_dir = pathlib.Path(args.dataset)
-    args.pose_dir = args.dataset_dir / "poses"
+    args.pose_dir = args.dataset_dir / "correct"
     args.timestamp_dir = args.dataset_dir / "timestamps"
-    args.pointcloud_dir = args.dataset_dir / "3d_comp" / "os1"
+    args.pointcloud_dir = args.dataset_dir / "3d_comp_bkp" / "os1" / "0"
     args.image_dirs = {cam: args.dataset_dir / "2d_raw" / cam for cam in args.cams}
     args.calibration_dir = args.dataset_dir / "calibrations"
     args.global_bbox_dir = args.dataset_dir / "3d_bbox" / "global"
@@ -226,7 +226,6 @@ def load_kdtree_3d_bbox(args) -> dict:
     bboxes_kdtree = {
         class_name: KDTree([bbox[:3] for _, bbox in instances])
         for class_name, instances in bboxes_3d.items()
-        if len(instances) > 2
     }
 
     # Visualize 3D Bounding Box
@@ -234,7 +233,7 @@ def load_kdtree_3d_bbox(args) -> dict:
         # 3D Bounding Box Publisher for each class
         object_pubs = {
             class_name: rospy.Publisher(
-                f"instance_3dbbox/{class_name}", MarkerArray, queue_size=1
+                f"global_3dbbox/{class_name}", MarkerArray, queue_size=1
             )
             for class_name in CLASSES
         }
@@ -242,11 +241,12 @@ def load_kdtree_3d_bbox(args) -> dict:
 
         for class_name in object_pubs.keys():
             marker_array = MarkerArray()
-            for idx, bbox in enumerate(averaged_bboxes[class_name]):
+            for bbox in bboxes_3d[class_name]:
                 bbox_marker = create_bbox_3d_marker(
-                    bbox_3d=bbox,
+                    bbox_3d=bbox[1],
                     frame_id="map",
-                    marker_id=idx,
+                    marker_id=bbox[0],
+                    namespace=class_name,
                     color=CLASSES[class_name]["color"],
                 )
                 marker_array.markers.append(bbox_marker)
@@ -287,7 +287,7 @@ def refine_bbox_2d(
     for mask, iou_pred, instance in zip(masks, iou_preds, drawn_instances):
         # Filter out low quality masks
         iou_pred = iou_pred.cpu().numpy().squeeze()
-        if iou_pred < 0.7:
+        if iou_pred < 0.5:
             if DEBUG:
                 print(f"Low quality mask: {iou_pred}")
             continue
@@ -588,6 +588,9 @@ def main():
     if args.sam:
         load_SAM(args)
 
+    if args.ros:
+        rospy.init_node("get_annotations_2d")
+
     # Load 3D Bounding Box and Build KDTree
     bboxes_kdtree, bboxes_3d = load_kdtree_3d_bbox(args)
     print("3D Bounding Box and KDTree Loaded")
@@ -595,12 +598,8 @@ def main():
     # Main Loop
     for seq in args.sequences:
         print(f"* Processing Sequence {seq}...")
-        lidar_pose_np = np.loadtxt(args.pose_dir / f"{seq}.txt", delimiter=" ")[:, :8]
-        timestamp_np = np.loadtxt(args.timestamp_dir / f"{seq}.txt", delimiter=" ")
-
-        # Pointcloud & Image Directories
-        pointcloud_seq_dir = args.pointcloud_dir / str(seq)
-        image_seq_dirs = {cam: args.image_dirs[cam] / str(seq) for cam in args.cams}
+        lidar_pose_np = np.loadtxt(args.pose_dir / f"{seq}.txt")[:, :8]
+        timestamp_np = np.loadtxt(args.timestamp_dir / f"{seq}.txt")
 
         # Calibration
         os1_to_cam_extrinsics = {
@@ -620,11 +619,9 @@ def main():
         }
 
         # Main Loop
-        for lidar_pose in tqdm(lidar_pose_np, total=len(lidar_pose_np)):
+        for lidar_pose in tqdm(lidar_pose_np[::50], total=len(lidar_pose_np)):
             # Get Pose
             frame = np.searchsorted(timestamp_np, lidar_pose[0], side="left")
-            if frame % 500 != 0:
-                continue
 
             T_lg = np.eye(4)
             T_lg[:3, 3] = lidar_pose[1:4]
@@ -643,27 +640,23 @@ def main():
                 continue
 
             # Pointcloud & Image files
-            pc_file = pointcloud_seq_dir / f"3d_comp_os1_{seq}_{frame}.bin"
+            pc_file = args.pointcloud_dir / str(seq) / f"3d_comp_os1_{seq}_{frame}.bin"
+            if not pc_file.exists():
+                continue
             image_files = {
-                cam: image_seq_dirs[cam] / f"2d_raw_{cam}_{seq}_{frame}.jpg"
+                cam: args.image_dirs[cam] / str(seq) / f"2d_raw_{cam}_{seq}_{frame}.jpg"
                 for cam in args.cams
             }
             # Load Pointcloud & Images
-            pointcloud = np.fromfile(pc_file, dtype=np.float32).reshape(-1, 3)
+            pointcloud = np.fromfile(pc_file, dtype=np.float32).reshape(-1, 4)
 
             # Project queried 3D Bounding Box to 2D Bounding Box
             for cam in args.cams:
-                if DEBUG:
-                    print(f"Processing {seq}/{frame} {cam}...")
-
                 instances_frame = []
                 for class_name, indices in queried_indices.items():
                     for idx in indices:
                         instance_id, instance_bbox = bboxes_3d[class_name][idx]
                         bbox_3d_lidar = transform_bbox_3d(instance_bbox, T_gl)
-
-                        if DEBUG:
-                            print(f"{class_name} {instance_id}")
 
                         # Get 2D Bounding Box by projecting 3D Bounding Box
                         bbox_2d, points_in_bbox = get_bbox_2d(
@@ -695,7 +688,7 @@ def main():
                     "image_file": str(image_files[cam].stem),
                     "img_size": cam_params[cam]["img_size"].tolist(),
                     "camera": cam,
-                    "sequence": int(seq),
+                    "sequence": seq,
                     "frame": int(frame),
                     "weather_condition": SEQ_WEATHER[seq],
                     "pose": [round(p, 6) for p in cam_pose],
@@ -706,6 +699,10 @@ def main():
                 process_bboxes_frame(
                     str(image_files[cam]), instances_frame, output_file, info, args
                 )
+
+
+def publish_bbox_pc(pointcloud, bbox, T_l_g):
+    """publish 3D Bounding Box and Pointcloud"""
 
 
 if __name__ == "__main__":
