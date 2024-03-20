@@ -16,7 +16,8 @@ def average_rpy(angles: np.ndarray, degrees: bool = False) -> np.ndarray:
     sum_R = np.zeros((3, 3))
     for angle in angles:
         sum_R += R.from_euler("xyz", angle, degrees=degrees).as_matrix()
-    U, _, Vt = np.linalg.svd(sum_R)
+    mean_R = sum_R / len(angles)
+    U, _, Vt = np.linalg.svd(mean_R)
     return R.from_matrix(U @ Vt).as_euler("xyz", degrees=degrees)
 
 
