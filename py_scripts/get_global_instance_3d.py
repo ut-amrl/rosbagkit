@@ -57,7 +57,6 @@ def get_args():
         nargs="+",
         type=int,
         default=[0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 16, 17, 18, 19, 20, 21],
-        # default=[0],
         help="Sequence ID",
     )
     parser.add_argument(
@@ -75,11 +74,11 @@ def get_args():
     args = parser.parse_args()
 
     args.dataset_dir = Path(args.dataset)
-    # args.pose_dir = args.dataset_dir / "poses"
     args.pose_dir = args.dataset_dir / "correct"
+    # args.pose_dir = args.dataset_dir / "poses"
     args.timestamp_dir = args.dataset_dir / "timestamps"
     args.bbox_3d_dir = args.dataset_dir / "3d_bbox" / "os1"
-    args.global_bbox_3d_dir = args.dataset_dir / "3d_bbox" / "global"
+    args.global_bbox_3d_dir = args.dataset_dir / "3d_bbox" / "global_"
     args.pc_dir = args.dataset_dir / "3d_comp" / "os1"
     return args
 
@@ -107,6 +106,7 @@ def cluster_average_bbox_3d(bboxes: np.ndarray, threshold: float = 1.5) -> np.nd
     unique_labels = set(labels)
 
     # Averaging
+    # TODO: rotate with yaw to sticket to w > l
     averaged_bboxes = []
     for label in unique_labels:
         cluster_bboxes = bboxes[labels == label]

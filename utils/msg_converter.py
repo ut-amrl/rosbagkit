@@ -3,6 +3,7 @@ Author:      Dongmyeong Lee (domlee[at]utexas.edu)
 Date:        Sep 16, 2023
 Description: A collection of functions to convert data to ROS messages
 """
+
 from typing import Optional, Literal
 import rospy
 import numpy as np
@@ -410,10 +411,10 @@ def tf_msg_from_matrix(
     tf_msg.transform.translation.y = transformation[1, 3]
     tf_msg.transform.translation.z = transformation[2, 3]
 
-    quaternion = R.from_matrix(transformation[:3, :3]).as_quat()
-    pose_msg.pose.orientation.w = quaternion[3]
-    pose_msg.pose.orientation.x = quaternion[0]
-    pose_msg.pose.orientation.y = quaternion[1]
-    pose_msg.pose.orientation.z = quaternion[2]
+    quaternion = R.from_matrix(transformation[:3, :3]).as_quat()  # qx, qy, qz, qw
+    tf_msg.transform.rotation.w = quaternion[3]
+    tf_msg.transform.rotation.x = quaternion[0]
+    tf_msg.transform.rotation.y = quaternion[1]
+    tf_msg.transform.rotation.z = quaternion[2]
 
     return tf_msg

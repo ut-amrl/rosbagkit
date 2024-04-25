@@ -3,6 +3,7 @@ Author:      Dongmyeong Lee (domlee[at]utexas[dot]edu)
 Date:        Feb 20, 2024
 Description: Get annotations of instances in 2D image from 3D Bounding Box
 """
+
 import os
 import pathlib
 import argparse
@@ -41,7 +42,7 @@ from utils.geometry import (
     transform_bbox_3d,
     filter_points_inside_bbox_3d,
 )
-from utils.image_utils import compute_overlap, ratio_within_image
+from utils.image import compute_overlap, ratio_within_image
 from utils.ros_viz_utils import (
     create_bbox_3d_marker,
     create_filled_bbox_3d_marker,
@@ -280,7 +281,7 @@ def refine_bbox_2d(
     masks, iou_preds, _ = SAM_PREDICTOR.predict_torch(
         point_coords=None, point_labels=None, boxes=boxes, multimask_output=False
     )
-    
+
     refined_instances = []
     segmentations = []
 
@@ -614,9 +615,7 @@ def main():
             )
             for cam in args.cams
         }
-        T_cam_os1 = {
-            cam: np.linalg.inv(os1_to_cam_extrinsics[cam]) for cam in args.cams
-        }
+        t_cl = {cam: np.linalg.inv(os1_to_cam_extrinsics[cam]) for cam in args.cams}
         cam_params = {
             cam: load_camera_params(
                 args.calibration_dir / str(seq) / f"calib_{cam}_intrinsics.yaml"
@@ -686,7 +685,7 @@ def main():
                 if len(instances_frame) == 0:
                     continue
 
-                T_cg = T_lg @ T_cam_os1[cam]
+                T_cg = T_lg @ t_cl[cam]
                 cam_pose = np.zeros(7)
                 cam_pose[:3] = T_cg[:3, 3]
                 cam_pose[3:] = np.roll(R.from_matrix(T_cg[:3, :3]).as_quat(), 1)

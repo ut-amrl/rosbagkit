@@ -3,11 +3,120 @@ Author:      Dongmyeong (domlee[at]utexas.edu)
 Date:        Sep 23, 2023
 Description: A collection of image utility functions.
 """
+
 import os
 from typing import Optional
 
 import numpy as np
 import cv2
+import matplotlib.pyplot as plt
+
+import torch
+from torch_scatter import scatter_max
+
+from .visualization import (
+    visualize_normalized_image,
+    visualize_rgbd_image,
+    draw_points_on_image,
+)
+
+
+def get_disparity_map(img_left, img_right):
+    assert img_left.shape == img_right.shape
+
+    # SGBM Parameters
+    block_size = 5
+    C = img_left.shape[2] if len(img_left.shape) == 3 else 1  # RGB or Grayscale
+
+    left_matcher = cv2.StereoSGBM_create(
+        minDisparity=0,
+        numDisparities=block_size * 16,  # max_disp has to be dividable by 16
+        blockSize=block_size,
+        P1=8 * C * block_size**2,
+        P2=32 * C * block_size**2,
+        disp12MaxDiff=1,
+        uniquenessRatio=15,
+        speckleWindowSize=50,
+        speckleRange=32,
+        preFilterCap=63,
+        mode=cv2.STEREO_SGBM_MODE_SGBM_3WAY,
+        # mode=cv2.StereoSGBM_MODE_HH,
+    )
+    right_matcher = cv2.ximgproc.createRightMatcher(left_matcher)
+
+    # WLSFilter Parameters
+    lmbda = 80000
+    sigma = 1.2
+    wls_filter = cv2.ximgproc.createDisparityWLSFilter(matcher_left=left_matcher)
+    wls_filter.setLambda(lmbda)
+    wls_filter.setSigmaColor(sigma)
+
+    # compute disparity maps
+    disp_left = left_matcher.compute(img_left, img_right)
+    disp_right = right_matcher.compute(img_right, img_left)
+
+    visualize_rgbd_image(img_left, disp_left)
+
+    # apply wls filter
+    filtered_left = wls_filter.filter(disp_left, img_left, None, disp_right)
+    filtered_right = wls_filter.filter(-disp_right, img_right, None, disp_left)
+
+    # visualize_rgbd_image(img_left, filtered_left)
+
+
+def draw_epipolar_lines(img1, img2):
+    if img1 is None or img2 is None:
+        raise ValueError("Failed to load the images")
+
+    # Initiate SIFT detector
+    sift = cv2.SIFT_create()
+
+    # find the keypoints and descriptors with SIFT
+    kp1, des1 = sift.detectAndCompute(img1, None)
+    kp2, des2 = sift.detectAndCompute(img2, None)
+
+    # FLANN parameters
+    FLANN_INDEX_KDTREE = 1
+    index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
+    search_params = dict(checks=50)  # or pass empty dictionary
+
+    flann = cv2.FlannBasedMatcher(index_params, search_params)
+    matches = flann.knnMatch(des1, des2, k=2)
+
+    # Ratio test as per Lowe's paper
+    good = []
+    pts1 = []
+    pts2 = []
+    for i, (m, n) in enumerate(matches):
+        if m.distance < 0.75 * n.distance:
+            good.append(m)
+            pts2.append(kp2[m.trainIdx].pt)
+            pts1.append(kp1[m.queryIdx].pt)
+
+    pts1 = np.int32(pts1)
+    pts2 = np.int32(pts2)
+
+    # Keep only epipolar lines
+    F, mask = cv2.findFundamentalMat(pts1, pts2, cv2.FM_LMEDS)
+    pts1 = pts1[mask.ravel() == 1]
+    pts2 = pts2[mask.ravel() == 1]
+
+    height = max(img1.shape[0], img2.shape[0])
+    width = img1.shape[1] + img2.shape[1]
+    new_img = np.zeros((height, width, 3), dtype=np.uint8)
+    new_img[: img1.shape[0], : img1.shape[1]] = cv2.cvtColor(img1, cv2.COLOR_GRAY2BGR)
+    new_img[: img2.shape[0], img1.shape[1] :] = cv2.cvtColor(img2, cv2.COLOR_GRAY2BGR)
+
+    for (x1, y1), (x2, y2) in zip(pts1, pts2):
+        color = tuple(np.random.randint(0, 255, 3).tolist())
+        pt1 = (int(x1), int(y1))
+        pt2 = (int(x2) + img1.shape[1], int(y2))
+        cv2.circle(new_img, pt1, 5, color, -1)
+        cv2.circle(new_img, pt2, 5, color, -1)
+        cv2.line(new_img, pt1, pt2, color, 2)
+
+    plt.imshow(new_img)
+    plt.show()
 
 
 def compute_overlap(

@@ -20,9 +20,7 @@ def get_args():
     parser.add_argument(
         "--graph_dir",
         type=str,
-        # default="/home/dongmyeong/Projects/AMRL/CODa/interactive_slam/dense_keyframe/0",
-        default="/home/dongmyeong/Projects/AMRL/CODa/interactive_slam/global_keyframe/final_bkp",
-        # default="/home/dongmyeong/Projects/AMRL/CODa/interactive_slam/odom/",
+        default="/home/dongmyeong/Projects/AMRL/CODa/interactive_slam_results/dense_keyframe/0",
         help="Path to the graph directory (output of interactive_slam)",
     )
     parser.add_argument(

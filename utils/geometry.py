@@ -3,6 +3,7 @@ Author:      Dongmyeong Lee (domlee[at]utexas.edu)
 Date:        Sep 16, 2023
 Description: functions for geometric operations.
 """
+
 import os
 import sys
 
@@ -12,7 +13,7 @@ from scipy.spatial.transform import Rotation as R
 from typing import Optional
 
 sys.path.append(os.path.join(os.path.dirname(__file__)))
-from image_utils import compute_iou
+from utils.image import compute_iou
 
 
 def get_corners_bbox_3d(bbox_3d: np.ndarray) -> tuple[np.ndarray, np.ndarray]:

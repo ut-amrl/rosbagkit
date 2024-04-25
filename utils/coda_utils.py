@@ -44,11 +44,33 @@ def load_camera_params(intrinsic_file: str) -> Dict[str, np.ndarray]:
     """
     with open(intrinsic_file, "r") as f:
         params = yaml.safe_load(f)
-        matrix_params = params["camera_matrix"]
 
-        intrinsic_matrix = np.array(matrix_params["data"]).reshape(
-            matrix_params["rows"], matrix_params["cols"]
-        )
-        image_size = np.array([params["image_width"], params["image_height"]])
-        distortion_coeffs = np.array(params["distortion_coefficients"]["data"])
-    return {"K": intrinsic_matrix, "img_size": image_size, "D": distortion_coeffs}
+        if "image_width" in params.keys() and "image_height" in params.keys():
+            image_size = np.array([params["image_width"], params["image_height"]])
+        elif "width" in params.keys() and "height" in params.keys():
+            image_size = np.array([params["width"], params["height"]])
+
+        intrinsic_matrix = np.array(params["camera_matrix"]["data"]).reshape(
+            params["camera_matrix"]["rows"],
+            params["camera_matrix"]["cols"],
+        )  # (3, 3)
+
+        distortion_coeffs = np.array(params["distortion_coefficients"]["data"])  # (5,)
+
+        rectification_matrix = np.array(params["rectification_matrix"]["data"]).reshape(
+            params["rectification_matrix"]["rows"],
+            params["rectification_matrix"]["cols"],
+        )  # (3, 3)
+
+        projection_matrix = np.array(params["projection_matrix"]["data"]).reshape(
+            params["projection_matrix"]["rows"],
+            params["projection_matrix"]["cols"],
+        )  # (3, 4)
+
+    return {
+        "img_size": image_size,
+        "K": intrinsic_matrix,
+        "D": distortion_coeffs,
+        "R": rectification_matrix,
+        "P": projection_matrix,
+    }

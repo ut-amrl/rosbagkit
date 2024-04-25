@@ -1,0 +1,59 @@
+#!/bin/bash
+PROJECT_DIR=$(realpath $(dirname "$0")/../..)
+
+scenes=(
+  gq_appld_south_tour_01_2024-03-14-10-08-34
+  gq_appld_wandagq_32_field_foresttrail_06_2024-03-15-11-17-44
+  gq_appld_wandagq_32_forest_02_2024-03-15-12-02-37
+  gq_appld_wandagq_32_forest_03_2024-03-15-12-16-36
+  gq_TN_Menu_A_datacollect_02_2024-02-21-17-23-09
+  gq_appld_forest_mission_autonomous_deployment_01_2024-03-12-14-15-49
+)
+dataset_dir="/home/dongmyeong/Projects/datasets/SARA"
+
+# Define the paths to your catkin workspace setup files
+setup_ws1="/home/dongmyeong/Projects/others/Point-LIO/devel/setup.bash"
+setup_ws2="/home/dongmyeong/Projects/interactive_slam/devel/setup.bash"
+
+# Function to handle script termination
+cleanup() {
+  echo "Terminating background processes..."
+  kill $PID1 $PID2
+  wait $PID1 $PID2
+  exit 1  # Exit script with a status indicating failure
+}
+
+# Trap SIGINT (Ctrl+C) and call the cleanup function
+trap cleanup SIGINT
+
+for scene in "${scenes[@]}"; do
+  # Start Point-LIO
+  ( source $setup_ws1 && exec roslaunch point_lio mapping_wanda.launch --wait ) &
+  PID1=$!
+
+  # Start odometry_saver
+  ( source $setup_ws2 && exec roslaunch odometry_saver point_lio.launch \
+      dataset:=wanda save_pose_only:=true \
+      pose_file:=$dataset_dir/poses/point_lio/$scene.txt \
+      dst_directory:=$dataset_dir/point_lio_results/$scene ) &
+  PID2=$!
+
+  # Wait for both background processes to start
+  sleep 3
+
+  # Start rosbag play
+  rosbag play $dataset_dir/bagfiles/$scene.bag \
+    --clock --topic /wanda/lidar_points /wanda/imu/data &
+  wait $!
+
+  echo "Rosbag play finished. Terminating background processes..."
+  kill $PID1 $PID2
+  wait $PID1 $PID2 2>/dev/null
+
+  # echo "Converting odometry format..."
+  # python $PROJECT_DIR/py_scripts/interactive_slam/convert_odom_format.py \
+  #   --odom_dir $dataset_dir/point_lio_results/$scene \
+  #   --pc_outdir $dataset_dir/3d_comp/$scene \
+  #   --pose_outfile $dataset_dir/poses/os1/$scene.txt
+done
+echo "All done!"
