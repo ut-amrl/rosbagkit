@@ -13,7 +13,6 @@ import time
 
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-from manifpy import SE3
 
 import rospy
 import rosbag
@@ -25,20 +24,7 @@ import ros_numpy
 
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[2]))
 from utils.msg_converter import np_to_pointcloud2
-
-
-def xyz_qwxyz_to_SE3(pose: np.ndarray) -> SE3:
-    """Convert the pose [x, y, z, qw, qx, qy, qz] to an SE(3)"""
-    position = np.array(pose[:3])
-    quaternion = np.array(pose[[4, 5, 6, 3]])
-    quaternion /= np.linalg.norm(quaternion)
-    return SE3(position, quaternion)
-
-
-def SE3_to_xyz_qwxyz(pose: SE3) -> np.ndarray:
-    """Convert the SE(3) to [x, y, z, qw, qx, qy, qz]"""
-    x, y, z, qx, qy, qz, qw = pose.coeffs()
-    return np.array([x, y, z, qw, qx, qy, qz])
+from utils.lie_math import xyz_qwxyz_to_SE3, SE3_to_xyz_qwxyz
 
 
 def motion_compensation(pc_msg, lower_pose, upper_pose):

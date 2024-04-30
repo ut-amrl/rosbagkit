@@ -12,13 +12,24 @@ setup_ws2="/home/dongmyeong/Projects/interactive_slam/devel/setup.bash"
 # Function to handle script termination
 cleanup() {
   echo "Terminating background processes..."
-  kill $PID1 $PID2
-  wait $PID1 $PID2
+  kill $PID1 $PID2 $PID3
+  wait $PID1 $PID2 $PID3
   exit 1  # Exit script with a status indicating failure
 }
 
 # Trap SIGINT (Ctrl+C) and call the cleanup function
 trap cleanup SIGINT
+
+# Check if roscore is already running
+if pgrep -x "roscore" > /dev/null; then
+  # Kill existing roscore
+  pkill -f "roscore"
+  sleep 3
+fi
+
+# Start roscore
+roscore & PID3=$!
+sleep 3
 
 for seq in "${sequences[@]}"; do
   # Start Point-LIO
@@ -27,14 +38,17 @@ for seq in "${sequences[@]}"; do
 
   # Start odometry_saver
   ( source $setup_ws2 && exec roslaunch odometry_saver point_lio.launch \
-      dataset:=coda dst_directory:=${dataset_dir}/point_lio_results/${seq} ) &
+      dataset:=coda save_pose_only:=true \
+      pose_file:=$dataset_dir/poses/point_lio/$seq.txt \
+      dst_directory:=${dataset_dir}/point_lio_results/${seq} ) &
   PID2=$!
 
   # Wait for both background processes to start
   sleep 3
 
   # Execute the third command in the foreground
-  python $PROJECT_DIR/py_scripts/publish_raw_coda.py --pc --imu --rate 10 --seq ${seq} &
+  python $PROJECT_DIR/py_scripts/publish_data/publish_raw_coda.py \
+    --pc --imu --rate 10 --seq ${seq} &
   wait $!
 
   echo "Rosbag play finished. Terminating background processes..."

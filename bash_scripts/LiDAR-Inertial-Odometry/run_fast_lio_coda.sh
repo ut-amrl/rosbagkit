@@ -39,7 +39,9 @@ for seq in "${sequences[@]}"; do
 
   # Start the second command in the background with its workspace sourced
   ( source $setup_ws2 && exec roslaunch odometry_saver fast_lio.launch \
-      dataset:=coda dst_directory:=$dataset_dir/fast_lio_results/$seq ) &
+      dataset:=coda save_pose_only:=false \
+      pose_file:=$dataset_dir/poses/fast_lio/$seq.txt \
+      dst_directory:=$dataset_dir/fast_lio_results/$seq ) &
   PID2=$!
 
   # Wait for both background processes to start

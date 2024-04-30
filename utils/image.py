@@ -12,7 +12,6 @@ import cv2
 import matplotlib.pyplot as plt
 
 import torch
-from torch_scatter import scatter_max
 
 from .visualization import (
     visualize_normalized_image,

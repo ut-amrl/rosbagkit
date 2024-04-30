@@ -31,16 +31,14 @@ def load_keyframe_pose(keyframe_pose_file: str) -> np.ndarray:
 
         # estimated pose (SE3)
         pose_lines = lines[2:6]
-        keyframe_pose_matrix = np.array(
-            [list(map(float, line.split())) for line in pose_lines]
-        )
-        r = R.from_matrix(keyframe_pose_matrix[:3, :3])
+        pose_matrix = np.array([list(map(float, line.split())) for line in pose_lines])
 
         # estimated pose (timestamp, x, y, z, qw, qx, qy, qz)
         keyframe_pose = np.zeros(8)
         keyframe_pose[0] = timestamp
-        keyframe_pose[1:4] = keyframe_pose_matrix[:3, 3]
-        keyframe_pose[4:] = r.as_quat()[[3, 0, 1, 2]]
+        keyframe_pose[1:4] = pose_matrix[:3, 3]
+        keyframe_pose[4:] = R.from_matrix(pose_matrix[:3, :3]).as_quat()[[3, 0, 1, 2]]
+
     return keyframe_pose
 
 
@@ -57,14 +55,10 @@ def main(args):
 
     # remove duplicates rows
     _, idx = np.unique(sorted_keyframes[:, 0], axis=0, return_index=True)
-    sorted_keyframes = sorted_keyframes[idx]
+    poses = sorted_keyframes[idx]
 
     # Save the keyframe poses
-    with open(args.pose_file, "w") as f:
-        for keyframe in sorted_keyframes:
-            ts = keyframe[0]
-            pose = keyframe[1:]
-            f.write(f"{ts:.6f} " + " ".join(f"{p:.8f}" for p in pose) + "\n")
+    np.savetxt(args.pose_file, poses, fmt="%.6f %.8f %.8f %.8f %.8f %.8f %.8f %.8f")
     print(f"Saved {args.pose_file}")
 
 

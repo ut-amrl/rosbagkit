@@ -1,0 +1,18 @@
+#!/bin/bash
+PROJECT_DIR=$(realpath $(dirname "$0")/../..)
+
+dataset_dir="/home/dongmyeong/Projects/datasets/CODa"
+sequences=(0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22)
+new_size="306 256" # (1/4 of the original size)
+
+trap "echo 'Script interrupted'; exit;" SIGINT
+
+for seq in "${sequences[@]}" ; do
+    for cam in "cam0" "cam1" ; do
+        echo "Resizing images for sequence $seq, camera $cam"
+        python $PROJECT_DIR/py_scripts/miscellaneous/resize_images.py \
+            --source_dir $dataset_dir/2d_raw/$cam/$seq \
+            --target_dir $dataset_dir/2d_raw_resized/$cam/$seq \
+            --new_size $new_size
+    done
+done

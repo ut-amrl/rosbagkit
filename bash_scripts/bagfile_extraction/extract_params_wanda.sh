@@ -2,8 +2,10 @@
 PROJECT_DIR=$(realpath $(dirname "$0")/../..)
 
 os_frame="wanda/center_ouster_link"
-cam_left_frame="wanda/stereo_left_link"
-cam_right_frame="wanda/stereo_right_link"
+cam_left_frame="wanda/stereo_left_optical_frame"
+cam_right_frame="wanda/stereo_right_optical_frame"
+imu_frame="wanda/imu_link"
+
 cam_left_info="/wanda/stereo_left/camera_info"
 cam_right_info="/wanda/stereo_right/camera_info"
 
@@ -30,6 +32,12 @@ for scene in "${scenes[@]}" ; do
     --source_frame=$os_frame \
     --target_frame=$cam_right_frame \
     --outfile=$dataset_dir/calibrations/$scene/os_to_cam_right.yaml
+
+  python $PROJECT_DIR/py_scripts/bagfile_extraction/extract_tf.py \
+    --bagfile=$dataset_dir/bagfiles/$scene.bag \
+    --source_frame=$os_frame \
+    --target_frame=$imu_frame \
+    --outfile=$dataset_dir/calibrations/$scene/os_to_imu.yaml
 
   python $PROJECT_DIR/py_scripts/bagfile_extraction/extract_camera_info.py \
     --bagfile=$dataset_dir/bagfiles/$scene.bag \

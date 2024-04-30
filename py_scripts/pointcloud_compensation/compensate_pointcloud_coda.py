@@ -11,6 +11,7 @@ import argparse
 from tqdm import tqdm
 from natsort import natsorted
 import time
+import warnings
 import matplotlib.pyplot as plt
 
 import numpy as np
@@ -24,7 +25,7 @@ from sensor_msgs.msg import PointCloud2, Imu, Image
 from rosgraph_msgs.msg import Clock
 from nav_msgs.msg import Odometry, Path
 
-sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
+sys.path.append(str(pathlib.Path(__file__).resolve().parents[2]))
 from utils.msg_converter import np_to_pointcloud2, np_to_imu
 from utils.ros_utils import start_roscore
 
@@ -32,15 +33,15 @@ PC_TOPIC = "/ouster_points"
 ODOM_TOPIC = "/odom"
 
 
-def process_pointcloud(bin_path, dt):
+def motion_compensation(pc_file, ts, poses):
     N_HORIZON = 1024
     N_RING = 128
 
     try:
-        points = np.fromfile(bin_path, dtype=np.float32).reshape(N_RING, N_HORIZON, -1)
+        points = np.fromfile(pc_file, dtype=np.float32).reshape(N_RING, N_HORIZON, -1)
         points = points[:, :, :3]  # x, y, z
     except IOError:
-        raise IOError("Could not read the file:", bin_path)
+        raise IOError("Could not read the file:", pc_file)
 
     # time between horizontal scans
     t_values = np.linspace(0, dt, N_HORIZON, endpoint=False)
@@ -57,38 +58,26 @@ def main(args):
     rospy.init_node("Pointcloud_Compensator", anonymous=True)
     rospy.set_param("use_sim_time", True)
 
-    # Data Publishers
-    clock_pub = rospy.Publisher("/clock", Clock, queue_size=10)
-    pc_pub = rospy.Publisher(PC_TOPIC, PointCloud2, queue_size=10)
-    odom_pub = rospy.Publisher(ODOM_TOPIC, Odometry, queue_size=10)
-    tf_broadcaster = tf2_ros.TransformBroadcaster()
-
     # Pose Data
-    pose_np = np.loadtxt(args.pose_file)[:, :8]
-    print(f"Total {len(pose_np)} pose data")
+    dense_poses = np.loadtxt(args.dense_posefile)[:, :8]
+    print(f"Total {len(dense_poses)} pose data")
 
-    # Point Cloud Data
-    pc_files = natsorted(os.listdir(args.pc_dir))
-    print(f"Total {len(pc_files)} pointcloud files")
-
-    # Load Timestamp
+    # Point Cloud Data and its Timestamp
+    pc_files = natsorted(list(args.pc_dir.glob("*.bin")))
     timestamps = np.loadtxt(args.timestamp, dtype=np.float64)
-    print(f"Total {len(timestamps)} timestamps")
-    assert len(timestamps) == len(pc_files)
+    print(f"Total {len(pc_files)} pointcloud files and timestamps")
+    assert len(pc_files) == len(timestamps)
 
-    for frame, ts in tqdm(enumerate(timestamps)):
+    for idx, ts in tqdm(enumerate(timestamps), total=len(timestamps)):
         if rospy.is_shutdown():
             break
 
-        pc_begin_time = ts
-        pc_end_time = (
-            timestamps[frame + 1]
-            if frame + 1 < len(timestamps)
-            else pc_begin_time + 0.1  # 10Hz
-        )
-        pc_file = args.pc_dir / pc_files[frame]
-        raw_points = process_pointcloud(pc_file, pc_end_time - pc_begin_time)
-        print(raw_points.shape)
+        # motion compensation
+        comp_pc = motion_compensation(pc_files[idx], ts, dense_poses)
+
+        # Save the compensated pointcloud
+        out_file = args.out_dir / f"3d_comp_os1_{args.seq}_{idx}.bin"
+        comp_pc.astype(np.float32).tofile(out_file)
 
 
 def get_args():
@@ -101,7 +90,7 @@ def get_args():
     args.dataset_dir = pathlib.Path(args.dataset_dir)
     args.pc_dir = args.dataset_dir / "3d_raw" / "os1" / str(args.seq)
     args.timestamp = args.dataset_dir / "timestamps" / f"{args.seq}.txt"
-    args.pose_file = args.dataset_dir / "poses" / "point-lio" / f"{args.seq}.txt"
+    args.dense_posefile = args.dataset_dir / "poses" / "point-lio" / f"{args.seq}.txt"
 
     args.out_dir = args.dataset_dir / "3d_comp" / "os1" / str(args.seq)
     os.makedirs(args.out_dir, exist_ok=True)
@@ -110,11 +99,5 @@ def get_args():
 
 
 if __name__ == "__main__":
-    roscore_process = start_roscore()
     args = get_args()
-    try:
-        main(args)
-    finally:
-        if roscore_process:
-            print("Killing roscore...")
-            roscore_process.kill()
+    main(args)

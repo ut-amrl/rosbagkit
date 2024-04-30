@@ -47,7 +47,7 @@ for scene in "${scenes[@]}"; do
   # Start odometry_saver
   ( source $setup_ws2 && exec roslaunch odometry_saver fast_lio.launch \
       dataset:=wanda save_pose_only:=false \
-      pose_file:=$dataset_dir/poses/fast_lio/$scene.txt \
+      pose_file:=$dataset_dir/poses/$scene/fast_lio.txt \
       dst_directory:=$dataset_dir/fast_lio_results/$scene --wait ) &
   PID2=$!
 
@@ -67,7 +67,7 @@ for scene in "${scenes[@]}"; do
   python $PROJECT_DIR/py_scripts/interactive_slam/convert_odom_format.py \
     --odom_dir $dataset_dir/fast_lio_results/$scene \
     --pc_outdir $dataset_dir/3d_comp/$scene \
-    --pose_outfile $dataset_dir/poses/os1/$scene.txt \
+    --pose_outfile $dataset_dir/poses/$scene/os1.txt \
     --prefix 3d_comp_os1_
 done
 

@@ -11,6 +11,8 @@ scenes=(
 )
 dataset_dir="/home/dongmyeong/Projects/datasets/SARA"
 
+trap "echo 'Script interrupted'; exit;" SIGINT
+
 for scene in "${scenes[@]}"; do
     python $PROJECT_DIR/py_scripts/pointcloud_compensation/compensate_pointcloud_bagfile.py \
         --bagfile $dataset_dir/bagfiles/$scene.bag \

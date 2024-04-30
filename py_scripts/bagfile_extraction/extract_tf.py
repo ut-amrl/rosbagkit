@@ -56,9 +56,9 @@ def main(args):
             if not np.isnan(
                 [trans.x, trans.y, trans.z, rot.x, rot.y, rot.z, rot.w]
             ).any():
-                print("Transform received:")
-                print(f"Translation: {trans.x}, {trans.y}, {trans.z}")
-                print(f"Rotation: {rot.x}, {rot.y}, {rot.z}, {rot.w}")
+                print(f"Transform received: H^{args.source_frame}_{args.target_frame}")
+                print(f"Trans (x, y, z): {trans.x}, {trans.y}, {trans.z}")
+                print(f"Quat (qw, qx, qy, qz): {rot.w}, {rot.x}, {rot.y}, {rot.z}")
                 break
             else:
                 print("Received NaN in transform, skipping...")

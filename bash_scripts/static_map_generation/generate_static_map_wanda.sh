@@ -14,7 +14,6 @@ scenes=(
 trap "echo 'Script interrupted'; exit;" SIGINT
 
 for scene in "${scenes[@]}" ; do
-  echo "Generating depth for scene: $scene"
-  python $PROJECT_DIR/py_scripts/depth_generation/generate_depth_wanda.py \
-    --dataset_dir=${dataset_dir} --scene=${scene} --window=20
+  python $PROJECT_DIR/py_scripts/static_map_generation/generate_static_map_wanda.py \
+    --dataset_dir=${dataset_dir} --scene=${scene}
 done

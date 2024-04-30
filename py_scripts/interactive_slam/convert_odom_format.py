@@ -64,6 +64,7 @@ def main(args):
         ref_timestamps = np.loadtxt(args.timestamp, delimiter=" ", usecols=0)
 
     frame = 0
+    poses = []
     for odom_file, pcd_file in tqdm(zip(odometry_files, pcd_files)):
         assert odom_file.stem == pcd_file.stem
         sec, nsec = odom_file.stem.split("_")
