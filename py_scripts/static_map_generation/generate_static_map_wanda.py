@@ -32,9 +32,11 @@ def accumulate_pointcloud(pc_files, pose_np, blind):
         pc_np = pc_np[np.linalg.norm(pc_np, axis=1) > blind]
 
         # Transform the pointcloud to the world frame
+        pc_world = pc_np @ H_lw[:3, :3].T + H_lw[:3, 3].T
+
+        # Accumulate the pointcloud
         pc_o3d = o3d.geometry.PointCloud()
-        pc_o3d.points = o3d.utility.Vector3dVector(pc_np)
-        pc_o3d.transform(H_lw)
+        pc_o3d.points = o3d.utility.Vector3dVector(pc_world)
         accumulated_pc_o3d += pc_o3d
 
     return accumulated_pc_o3d
@@ -47,7 +49,7 @@ def downsample_pointcloud(pc, voxel_size, nb_neighbors, std_ratio):
     voxel_down_pc = pc.voxel_down_sample(voxel_size=voxel_size)
 
     # Remove statistical outliers
-    clean_pc, ind = voxel_down_pc.remove_statistical_outlier(
+    clean_pc, _ = voxel_down_pc.remove_statistical_outlier(
         nb_neighbors=nb_neighbors, std_ratio=std_ratio
     )
     return clean_pc
@@ -68,9 +70,10 @@ def main(args):
     # Save the static map
     static_map_np = np.asarray(clean_pc.points, dtype=np.float32)
     static_map_np.tofile(args.static_map_file)
-    print(f"{len(static_map_np)} points saved to {args.static_map_file}")
+    print(f"{len(static_map_np)} points saved to {args.static_map_file}\n")
 
-    o3d.visualization.draw_geometries([clean_pc], window_name="Static Map")
+    if args.visualize:
+        o3d.visualization.draw_geometries([clean_pc], window_name="Static Map")
 
 
 def get_args():
@@ -87,10 +90,11 @@ def get_args():
         default="gq_appld_south_tour_01_2024-03-14-10-08-34",
         help="Scene name",
     )
-    parser.add_argument("--blind", type=float, default=30.0)
+    parser.add_argument("--blind", type=float, default=15.0)
     parser.add_argument("--voxel_size", type=float, default=1.0)
-    parser.add_argument("--nb_neighbors", type=int, default=1000)
-    parser.add_argument("--std_ratio", type=float, default=1.0)
+    parser.add_argument("--nb_neighbors", type=int, default=500)
+    parser.add_argument("--std_ratio", type=float, default=2.0)
+    parser.add_argument("--visualize", action="store_true")
     args = parser.parse_args()
 
     args.dataset_dir = pathlib.Path(args.dataset_dir)

@@ -21,7 +21,7 @@ for scene in "${scenes[@]}" ; do
         --bagfile=${dataset_dir}/bagfiles/${scene}.bag \
         --img_left_topic=${IMG_LEFT_TOPIC} \
         --img_right_topic=${IMG_RIGHT_TOPIC} \
-        --img_outdir=${dataset_dir}/2d_rect/${scene} \
+        --img_outdir=${dataset_dir}/2d_rct/${scene} \
         --ts_outdir=${dataset_dir}/timestamps/${scene} \
         --sync
 done

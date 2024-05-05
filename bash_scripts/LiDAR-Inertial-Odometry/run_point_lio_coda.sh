@@ -8,6 +8,7 @@ dataset_dir="/home/dongmyeong/Projects/datasets/CODa"
 # Define the paths to your catkin workspace setup files
 setup_ws1="/home/dongmyeong/Projects/others/Point-LIO/devel/setup.bash"
 setup_ws2="/home/dongmyeong/Projects/interactive_slam/devel/setup.bash"
+rviz=true
 
 # Function to handle script termination
 cleanup() {
@@ -33,32 +34,31 @@ sleep 3
 
 for seq in "${sequences[@]}"; do
   # Start Point-LIO
-  ( source $setup_ws1 && exec roslaunch point_lio mapping_coda.launch --wait) &
+  ( source $setup_ws1 && exec roslaunch point_lio mapping_coda.launch rviz:=$rviz --wait) &
   PID1=$!
 
   # Start odometry_saver
   ( source $setup_ws2 && exec roslaunch odometry_saver point_lio.launch \
       dataset:=coda save_pose_only:=true \
       pose_file:=$dataset_dir/poses/point_lio/$seq.txt \
-      dst_directory:=${dataset_dir}/point_lio_results/${seq} ) &
+      dst_directory:=$dataset_dir/point_lio_results/$seq ) &
   PID2=$!
 
   # Wait for both background processes to start
   sleep 3
 
   # Execute the third command in the foreground
-  python $PROJECT_DIR/py_scripts/publish_data/publish_raw_coda.py \
-    --pc --imu --rate 10 --seq ${seq} &
+  python $PROJECT_DIR/py_scripts/publish_data/publish_raw_data.py \
+    --dataset CODa --dataset_dir $dataset_dir --scene $seq &
   wait $!
 
   echo "Rosbag play finished. Terminating background processes..."
   kill $PID1 $PID2
   wait $PID1 $PID2
 
-  # echo "Converting odometry format..."
-  # python $PROJECT_DIR/py_scripts/interactive_slam/convert_odom_format.py \
-  #   --odom_dir $dataset_dir/point_lio_results/$seq \
-  #   --pc_outdir $dataset_dir/3d_comp/$seq \
-  #   --pose_outfile $dataset_dir/poses/os1/$seq.txt
+  echo "Compensating pointcloud for sequence ${seq}..."
+  python $PROJECT_DIR/py_scripts/pointcloud_compensation/compensate_pointcloud_coda.py \
+    --dataset_dir $dataset_dir \
+    --seq $seq
 done
 echo "All done!"

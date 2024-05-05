@@ -11,8 +11,6 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 
-import torch
-
 from .visualization import (
     visualize_normalized_image,
     visualize_rgbd_image,
@@ -23,20 +21,23 @@ from .visualization import (
 def get_disparity_map(img_left, img_right):
     assert img_left.shape == img_right.shape
 
+    if len(img_left.shape) == 3:
+        img_left_gray = cv2.cvtColor(img_left, cv2.COLOR_BGR2GRAY)
+        img_right_gray = cv2.cvtColor(img_right, cv2.COLOR_BGR2GRAY)
+
     # SGBM Parameters
     block_size = 5
-    C = img_left.shape[2] if len(img_left.shape) == 3 else 1  # RGB or Grayscale
 
     left_matcher = cv2.StereoSGBM_create(
         minDisparity=0,
-        numDisparities=block_size * 16,  # max_disp has to be dividable by 16
-        blockSize=block_size,
-        P1=8 * C * block_size**2,
-        P2=32 * C * block_size**2,
+        numDisparities=11 * 16,  # max_disp has to be dividable by 16
+        blockSize= block_size,
+        P1=4 * block_size**2,
+        P2=64 * block_size**2,
         disp12MaxDiff=1,
-        uniquenessRatio=15,
+        uniquenessRatio=2,
         speckleWindowSize=50,
-        speckleRange=32,
+        speckleRange=2,
         preFilterCap=63,
         mode=cv2.STEREO_SGBM_MODE_SGBM_3WAY,
         # mode=cv2.StereoSGBM_MODE_HH,
@@ -51,8 +52,8 @@ def get_disparity_map(img_left, img_right):
     wls_filter.setSigmaColor(sigma)
 
     # compute disparity maps
-    disp_left = left_matcher.compute(img_left, img_right)
-    disp_right = right_matcher.compute(img_right, img_left)
+    disp_left = left_matcher.compute(img_left_gray, img_right_gray)
+    disp_right = right_matcher.compute(img_right_gray, img_left_gray)
 
     visualize_rgbd_image(img_left, disp_left)
 
@@ -63,9 +64,14 @@ def get_disparity_map(img_left, img_right):
     # visualize_rgbd_image(img_left, filtered_left)
 
 
-def draw_epipolar_lines(img1, img2):
+def draw_epipolar_lines(img1, img2, outfile=None):
     if img1 is None or img2 is None:
         raise ValueError("Failed to load the images")
+    
+    if len(img1.shape) == 3:
+        img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
+    if len(img2.shape) == 3:
+        img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
 
     # Initiate SIFT detector
     sift = cv2.SIFT_create()
@@ -106,6 +112,7 @@ def draw_epipolar_lines(img1, img2):
     new_img[: img1.shape[0], : img1.shape[1]] = cv2.cvtColor(img1, cv2.COLOR_GRAY2BGR)
     new_img[: img2.shape[0], img1.shape[1] :] = cv2.cvtColor(img2, cv2.COLOR_GRAY2BGR)
 
+    # Draw lines
     for (x1, y1), (x2, y2) in zip(pts1, pts2):
         color = tuple(np.random.randint(0, 255, 3).tolist())
         pt1 = (int(x1), int(y1))
@@ -114,8 +121,14 @@ def draw_epipolar_lines(img1, img2):
         cv2.circle(new_img, pt2, 5, color, -1)
         cv2.line(new_img, pt1, pt2, color, 2)
 
-    plt.imshow(new_img)
-    plt.show()
+    # Save or display the image
+    if outfile:
+        cv2.imwrite(outfile, new_img)
+    else:
+        cv2.namedWindow("Epipolar Lines", cv2.WINDOW_NORMAL)
+        cv2.imshow("Epipolar Lines", new_img)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
 
 def compute_overlap(

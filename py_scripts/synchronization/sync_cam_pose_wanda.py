@@ -8,14 +8,8 @@ import warnings
 import numpy as np
 
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[2]))
-from utils.coda_utils import load_extrinsic_matrix, load_camera_params
-from utils.lie_math import (
-    SE3_to_xyz_quat,
-    matrix_to_SE3,
-    interpolate_SE3,
-    matrix_to_xyz_quat,
-    xyz_quat_to_matrix,
-)
+from utils.coda_utils import load_extrinsic_matrix
+from utils.lie_math import interpolate_SE3, matrix_to_xyz_quat, xyz_quat_to_matrix
 
 
 def linear_interpolation(timestamps, poses):
@@ -48,12 +42,12 @@ def load_data(args):
     img_left_files = natsorted(list(args.img_left_dir.glob("*.jpg")))
     img_left_timestamps = np.loadtxt(args.img_left_timestamp)
     assert len(img_left_files) == len(img_left_timestamps)
-    print(f"Loaded {len(img_left_files)} left images")
+    print(f"Loaded {len(img_left_timestamps)} timestamps for left images")
 
     img_right_files = natsorted(list(args.img_right_dir.glob("*.jpg")))
     img_right_timestamps = np.loadtxt(args.img_right_timestamp)
     assert len(img_right_files) == len(img_right_timestamps)
-    print(f"Loaded {len(img_right_files)} right images")
+    print(f"Loaded {len(img_right_timestamps)} timestamps for right images")
 
     # Load the camera intrinsics
     H_lc_left = load_extrinsic_matrix(args.cam_left_extrinsic)
@@ -70,6 +64,7 @@ def load_data(args):
 
 
 def main(args):
+    print(f"Syncronizing camera poses for {args.scene}")
     data = load_data(args)
 
     # Interpolate the LiDAR poses to the image timestamps
@@ -87,10 +82,11 @@ def main(args):
     ]
     cam_left_poses = np.hstack((left_timestamps[:, None], cam_left_poses))
     np.savetxt(
-        args.cam_left_pose_file,
+        args.out_cam_left_posefile,
         cam_left_poses,
         fmt="%.6f %.8f %.8f %.8f %.8f %.8f %.8f %.8f",
     )
+    print(f"Saved the camera poses to {args.out_cam_left_posefile}")
 
     # Transform the LiDAR poses to the camera poses using the extrinsics (Right)
     H_cl_right = np.linalg.inv(data["H_lc_right"])
@@ -100,10 +96,11 @@ def main(args):
     ]
     cam_right_poses = np.hstack((right_timestamps[:, None], cam_right_poses))
     np.savetxt(
-        args.cam_right_pose_file,
+        args.out_cam_right_posefile,
         cam_right_poses,
         fmt="%.6f %.8f %.8f %.8f %.8f %.8f %.8f %.8f",
     )
+    print(f"Saved the camera poses to {args.out_cam_right_posefile}\n")
 
 
 def get_args():
@@ -128,8 +125,8 @@ def get_args():
     args.cam_left_intrinsics = args.calib_dir / "cam_left_intrinsics.yaml"
     args.cam_right_intrinsics = args.calib_dir / "cam_right_intrinsics.yaml"
 
-    args.cam_left_pose_file = args.pose_dir / "cam_left.txt"
-    args.cam_right_pose_file = args.pose_dir / "cam_right.txt"
+    args.out_cam_left_posefile = args.pose_dir / "cam_left.txt"
+    args.out_cam_right_posefile = args.pose_dir / "cam_right.txt"
     return args
 
 

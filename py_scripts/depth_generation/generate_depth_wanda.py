@@ -19,9 +19,9 @@ import matplotlib.pyplot as plt
 
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[2]))
 from utils.coda_utils import load_extrinsic_matrix, load_camera_params
-from utils.image import get_disparity_map
+from utils.image import get_disparity_map, draw_epipolar_lines
 from utils.depth import fill_depth_bins, densify_depth_image, save_depth_image
-from utils.camera import project_to_image
+from utils.camera import project_to_image, project_to_rectified
 from utils.transforms import xyz_quat_to_matrix
 from utils.visualization import (
     visualize_pointcloud,
@@ -53,19 +53,19 @@ def compute_stereo_depth(
     depth_bins_right = np.full((H, W, 3), np.nan, dtype=np.float32)
     for pc_world in pc_world_window:
         # Project the point cloud to the left and right images
-        pc_img_left, pc_depth_left, valid_left = project_to_image(
+        pc_img_left, pc_depth_left, valid_left = project_to_rectified(
             img_left,
             pc_world,
             H_wc_left,
-            data["cam_left"]["K"],
-            data["cam_left"]["D"],
+            data["cam_left"]["R"],
+            data["cam_left"]["P"],
         )
-        pc_img_right, pc_depth_right, valid_right = project_to_image(
+        pc_img_right, pc_depth_right, valid_right = project_to_rectified(
             img_right,
             pc_world,
             H_wc_right,
-            data["cam_right"]["K"],
-            data["cam_right"]["D"],
+            data["cam_right"]["R"],
+            data["cam_right"]["P"],
         )
 
         # Accumulate the depth bins
@@ -82,29 +82,30 @@ def compute_stereo_depth(
         print("ratio of non-nan pixels (left): ", non_nan_left / (H * W))
         print("ratio of non-nan pixels (right): ", non_nan_right / (H * W))
 
-    # 3. Densify the depth map with Inverse Depth Fusion
-    densified_depth_left = densify_depth_image(depth_bins_left)
+    # 2. Compute the depth map with disparity map
+    get_disparity_map(img_left, img_right)
+
+    densified_depth_left = densify_depth_image(depth_bins_left) 
     densified_depth_right = densify_depth_image(depth_bins_right)
 
     return densified_depth_left, densified_depth_right
 
 
 def load_data(args):
-    print(f"Lodaing data from {args.dataset_dir} for {args.scene}")
-
     # Load the point cloud files and poses
-    pc_files = natsorted(list(args.pc_dir.glob("*.bin")))
+    pc_files = list(map(str, natsorted(args.pc_dir.glob("*.bin"))))
     poses = np.loadtxt(args.pose_file)  # timestamp, x, y, z, qw, qx, qy, qz
     assert len(pc_files) == len(poses)
-    print(f"Loaded {len(pc_files)} pointclouds and corresponding poses")
+    print(f"Loaded {len(pc_files)} pointclouds and poses")
+    print(f"pose file: {args.pose_file}")
 
     # Load the images and timestamps
-    img_left_files = natsorted(list(args.img_left_dir.glob("*.jpg")))
+    img_left_files = list(map(str, natsorted(args.img_left_dir.glob("*.jpg"))))
     left_poses = np.loadtxt(args.left_pose_file)
     assert len(img_left_files) == len(left_poses)
     print(f"Loaded {len(img_left_files)} left images and poses")
 
-    img_right_files = natsorted(list(args.img_right_dir.glob("*.jpg")))
+    img_right_files = list(map(str, natsorted(args.img_right_dir.glob("*.jpg"))))
     right_poses = np.loadtxt(args.right_pose_file)
     assert len(img_right_files) == len(right_poses)
     print(f"Loaded {len(img_right_files)} right images and poses")
@@ -128,13 +129,15 @@ def load_data(args):
 
 
 def main(args):
+    print(f"Generating depth images for {args.scene}")
+
     data = load_data(args)
 
     # Initialize the point cloud window
     pc_world_window = deque(maxlen=args.window)
     last_pc_idx = -1
 
-    for i in range(len(data["img_left_files"])):
+    for i in range(len(data["img_left_files"]))[-10:]:
         img_left = cv2.imread(str(data["img_left_files"][i]))
         img_right = cv2.imread(str(data["img_right_files"][i]))
         left_pose = data["left_poses"][i]
@@ -146,13 +149,11 @@ def main(args):
         # Accumulate the point clouds
         upper_pc_idx = np.searchsorted(data["poses"][:, 0], left_pose[0], side="right")
         for pc_idx in range(last_pc_idx + 1, upper_pc_idx):
-            print(f"Update the point cloud window with {pc_idx}")
             pc = np.fromfile(data["pc_files"][pc_idx], dtype=np.float32).reshape(-1, 3)
             H_lw = xyz_quat_to_matrix(data["poses"][pc_idx][1:])
 
             # Transform the point cloud to the world frame
-            pc_lidar = np.hstack((pc, np.ones((pc.shape[0], 1))))
-            pc_world = pc_lidar @ H_lw[:3].T  # Nx4 @ 4x3 -> Nx3
+            pc_world = pc @ H_lw[:3, :3].T + H_lw[:3, 3].T
             pc_world_window.append(pc_world)
         last_pc_idx = upper_pc_idx - 1
 
@@ -173,6 +174,13 @@ def main(args):
         save_depth_image(depth_left, left_file)
         save_depth_image(depth_right, right_file)
         print(f"Saved depth images: {left_file}, {right_file}")
+
+        if args.debug:
+            left_rgbd_file = str(args.left_rgbd_outdir / f"2d_rgbd_left_{i}.png")
+            right_rgbd_file = str(args.right_rgbd_outdir / f"2d_rgbd_right_{i}.png")
+            visualize_rgbd_image(img_left, depth_left, 0.3, outfile=left_rgbd_file)
+            visualize_rgbd_image(img_right, depth_right, 0.3, outfile=right_rgbd_file)
+            print(f"Saved rgbd images: {left_rgbd_file}, {right_rgbd_file}")
 
 
 def get_args():
@@ -201,6 +209,11 @@ def get_args():
     args.right_outdir = args.dataset_dir / "2d_depth" / args.scene / "right"
     args.left_outdir.mkdir(parents=True, exist_ok=True)
     args.right_outdir.mkdir(parents=True, exist_ok=True)
+
+    args.left_rgbd_outdir = args.dataset_dir / "2d_rgbd" / args.scene / "left"
+    args.right_rgbd_outdir = args.dataset_dir / "2d_rgbd" / args.scene / "right"
+    args.left_rgbd_outdir.mkdir(parents=True, exist_ok=True)
+    args.right_rgbd_outdir.mkdir(parents=True, exist_ok=True)
     return args
 
 

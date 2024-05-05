@@ -4,96 +4,84 @@ Date:        Apr 26, 2024
 Description: Publish pose
 """
 
-import os
 import sys
 import pathlib
 import argparse
-from tqdm import tqdm
-import time
+import threading
 
 import numpy as np
-import rospy
 
-import tf2_ros
+import rospy
 from rosgraph_msgs.msg import Clock
 from nav_msgs.msg import Odometry, Path
 
-sys.path.append(str(pathlib.Path(__file__).resolve().parents[2]))
-from utils.msg_converter import (
-    pose_stamped_from_xyz_quat,
-    odometry_from_xyz_quat,
-    tf_msg_from_quat,
+from thread_modules import (
+    SharedClock,
+    publish_clock,
+    publish_odom,
+    publish_tf,
+    publish_static_map,
 )
+
+sys.path.append(str(pathlib.Path(__file__).resolve().parents[2]))
 from utils.ros_utils import wait_for_subscribers
 
 GLOBAL_FRAME = "map"
 LIDAR_FRAME = "os1"
-PC_TOPIC = "/ouster_points"
-IMG0_TOPIC = "/camera/left/image_raw"
-IMG1_TOPIC = "/camera/right/image_raw"
+ODOM_TOPIC = "/odom"
+PATH_TOPIC = "/global_path"
 
 
 def main(args):
+    print(f"Publishing pose data of {args.scene} for {args.dataset}...")
+
     rospy.set_param("use_sim_time", True)
     rospy.init_node("pose_publisher", anonymous=True)
 
     # Data Publishers
     clock_pub = rospy.Publisher("/clock", Clock, queue_size=10)
-    # Odometry & Path Publisher
-    odom_pub = rospy.Publisher("/odom", Odometry, queue_size=1)
-    path_pub = rospy.Publisher("/global_path", Path, queue_size=1)
-    # Global Path Marker
-    global_path = Path()
-    global_path.header.frame_id = GLOBAL_FRAME
-    # Define TF Broadcaster
-    tf_broadcaster = tf2_ros.TransformBroadcaster()
+    odom_pub = rospy.Publisher(ODOM_TOPIC, Odometry, queue_size=1)
+    path_pub = rospy.Publisher(PATH_TOPIC, Path, queue_size=1)
+
+    # Load Pose & Timestamp
+    pose_np = np.loadtxt(args.pose_file)[:, :8]
+    timestamps = pose_np[:, 0]
 
     # Start-up delay
     wait_for_subscribers([odom_pub])
 
-    print(f"Publishing poses from {args.pose_file} ...")
+    # Load and publish static map
+    if args.map:
+        print(f"Loading static map from {args.map}")
+        publish_static_map(args.map, GLOBAL_FRAME)
 
-    # Load Pose & Timestamp
-    pose_np = np.loadtxt(args.pose_file)[:, :8]
+    shared_clock = SharedClock()
 
-    # Main Loop
-    last_time = time.time()
-    for idx, pose in tqdm(enumerate(pose_np), total=len(pose_np)):
-        if rospy.is_shutdown():
-            break
+    clock_thread = threading.Thread(
+        target=publish_clock, args=(clock_pub, shared_clock, timestamps)
+    )
+    odom_thread = threading.Thread(
+        target=publish_odom,
+        args=(odom_pub, path_pub, pose_np, GLOBAL_FRAME, LIDAR_FRAME, shared_clock),
+    )
+    tf_thread = threading.Thread(
+        target=publish_tf,
+        args=(pose_np, GLOBAL_FRAME, LIDAR_FRAME, shared_clock),
+    )
 
-        ts = rospy.Time.from_sec(pose[0])
-        clock_pub.publish(Clock(ts))
+    clock_thread.start()
+    odom_thread.start()
+    tf_thread.start()
 
-        # Publish LiDAR Pose and Path
-        odom_msg = odometry_from_xyz_quat(
-            pose[1:4], pose[4:8], GLOBAL_FRAME, LIDAR_FRAME, ts
-        )
-        odom_pub.publish(odom_msg)
-
-        pose_msg = pose_stamped_from_xyz_quat(pose[1:4], pose[4:8], GLOBAL_FRAME, ts)
-        global_path.poses.append(pose_msg)
-        path_pub.publish(global_path)
-
-        # Publish TF
-        tf_msg = tf_msg_from_quat(pose[1:4], pose[4:8], GLOBAL_FRAME, LIDAR_FRAME, ts)
-        tf_broadcaster.sendTransform(tf_msg)
-
-        # Wait for the next frame
-        while time.time() - last_time < 1 / args.rate:
-            time.sleep(0.01)
-        last_time = time.time()
+    clock_thread.join()
+    odom_thread.join()
+    tf_thread.join()
 
 
 def get_args():
     parser = argparse.ArgumentParser(description="Publish pose data")
     parser.add_argument("-f", "--pose_file", type=str, required=True)
-    parser.add_argument(
-        "--rate",
-        type=float,
-        default=100,
-        help="Publishing rate (0: no delay)",
-    )
+    parser.add_argument("--map", type=str, help="Static map file")
     return parser.parse_args()
 
 
