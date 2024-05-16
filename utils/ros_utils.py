@@ -4,46 +4,14 @@ Date:        Nov 21, 2023
 Description: ROS utility functions
 """
 
-import os
-import signal
 import time
 import subprocess
-import socket
-import rospy
 from typing import Union, Optional
 
-
-def start_roscore(new_instance: bool = False):
-    # Check if a roscore is already running on the default port
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        if s.connect_ex(("localhost", 11311)) == 0:
-            if not new_instance:
-                print("roscore is already running.")
-                return None
-            print("Attempting to kill the existing roscore instances...")
-            kill_roscore()
-
-    print("Starting a new roscore instance...")
-    roscore_process = subprocess.Popen(["roscore"])
-    time.sleep(5)  # Add a sleep of 3 seconds
-    return roscore_process
-
-
-def kill_roscore():
-    for process in ["roscore", "rosmaster"]:
-        try:
-            pids = (
-                subprocess.check_output(["pgrep", "-f", process])
-                .decode()
-                .strip()
-                .split()
-            )
-            for pid in pids:
-                os.kill(int(pid), signal.SIGTERM)
-                # os.waitpid(int(pid), 0)
-            print("Successfully killed all roscore processes.")
-        except subprocess.CalledProcessError:
-            print("No roscore processes found to kill.")
+import rospy
+import rosbag
+import tf2_ros
+from geometry_msgs.msg import TransformStamped, Vector3, Quaternion
 
 
 def play_bagfile(
@@ -96,3 +64,22 @@ def wait_for_subscribers(
     rospy.loginfo("All subscribers connected to all publishers")
 
     return True
+
+
+def log_tf(tf_buffer: tf2_ros.Buffer, bagfile: str, time_limit: Optional[float] = None):
+    bag = rosbag.Bag(bagfile)
+    start_time = None
+    timestamps = []
+
+    for _, msg, t in bag.read_messages(topics=["/tf", "/tf_static"]):
+        timestamps.append(t)
+        if start_time is None:
+            start_time = t
+        if (t - start_time).to_sec() > time_limit:
+            break
+
+        for transform in msg.transforms:
+            tf_buffer.set_transform(transform, "default_authority")
+
+    bag.close()
+    return timestamps

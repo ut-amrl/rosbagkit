@@ -9,7 +9,7 @@ trap "echo 'Script interrupted'; exit;" SIGINT
 for seq in "${sequences[@]}"; do
   python $PROJECT_DIR/py_scripts/pointcloud_registration/gicp.py \
     --pc_dir $dataset_dir/3d_comp/os1/$seq \
-    --pose_file $dataset_dir/poses/point-lio/sync_$seq.txt \
+    --pose_file $dataset_dir/poses/point_lio/sync_$seq.txt \
     --out_pose_file $dataset_dir/poses/gicp/$seq.txt \
     --plot
 done

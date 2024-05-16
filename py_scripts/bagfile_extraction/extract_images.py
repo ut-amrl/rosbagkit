@@ -9,15 +9,7 @@ import cv2
 from cv_bridge import CvBridge
 
 
-def synchronize_images(
-    left_msgs,
-    right_msgs,
-    left_outdir,
-    right_outdir,
-    left_ts_file,
-    right_ts_file,
-    prefix="",
-):
+def synchronize_images(left_msgs, right_msgs, args):
     print("Synchronizing images and saving them...")
     bridge = CvBridge()
 
@@ -35,8 +27,8 @@ def synchronize_images(
             left_image = bridge.compressed_imgmsg_to_cv2(left_msg.message)
             right_image = bridge.compressed_imgmsg_to_cv2(right_msg.message)
 
-            left_img_file = str(left_outdir / f"{prefix}_left_{frame}.jpg")
-            right_img_file = str(right_outdir / f"{prefix}_right_{frame}.jpg")
+            left_img_file = str(args.left_outdir / f"{args.prefix_left}{frame}.jpg")
+            right_img_file = str(args.right_outdir / f"{args.prefix_right}{frame}.jpg")
             cv2.imwrite(left_img_file, left_image)
             cv2.imwrite(right_img_file, right_image)
 
@@ -52,23 +44,33 @@ def synchronize_images(
         else:
             right_idx += 1
 
-    np.savetxt(left_ts_file, left_timestamps, fmt="%.6f")
-    np.savetxt(right_ts_file, right_timestamps, fmt="%.6f")
-
+    np.savetxt(args.ts_left_file, left_timestamps, fmt="%.6f")
+    np.savetxt(args.ts_right_file, right_timestamps, fmt="%.6f")
     print(f"Total synchronized image pairs saved: {frame}")
 
 
 def process_messages(msgs, output_dir, ts_file, prefix=""):
+    if not msgs:
+        return
+
+    print(f"Saving images to {output_dir}...")
     bridge = CvBridge()
 
     timestamps = []
     for i, msg in tqdm(enumerate(msgs), total=len(msgs), leave=False):
-        image = bridge.compressed_imgmsg_to_cv2(msg.message)
+        image = None
+        if msg.message._type == "sensor_msgs/CompressedImage":
+            image = bridge.compressed_imgmsg_to_cv2(msg.message)
+        elif msg.message._type == "sensor_msgs/Image":
+            image = bridge.imgmsg_to_cv2(msg.message)
+        else:
+            print("Unsupported image message type")
+            return
+
         cv2.imwrite(str(output_dir / f"{prefix}{i}.jpg"), image)
         timestamps.append(msg.message.header.stamp.to_sec())
 
     np.savetxt(ts_file, timestamps, fmt="%.6f")
-
     print(f"Total images saved: {len(msgs)}")
 
 
@@ -88,23 +90,18 @@ def main(args):
     )
     print(f"Total images: {len(left_msgs)} (left), {len(right_msgs)} (right)")
 
-    # Extract images
-    if args.sync:
-        synchronize_images(
-            left_msgs,
-            right_msgs,
-            args.left_outdir,
-            args.right_outdir,
-            args.left_ts_file,
-            args.right_ts_file,
-            "2d_rect",
-        )
-    else:
+    # Extract images (synchronize if needed)
+    if args.sync and right_msgs:
+        synchronize_images(left_msgs, right_msgs, args)
+
+        bag.close()
+        return
+
+    # Extract images (no synchronization)
+    process_messages(left_msgs, args.left_outdir, args.ts_left_file, args.prefix_left)
+    if right_msgs:
         process_messages(
-            left_msgs, args.left_outdir, args.left_ts_file, "2d_rect_left_"
-        )
-        process_messages(
-            right_msgs, args.right_outdir, args.right_ts_file, "2d_rect_right_"
+            right_msgs, args.right_outdir, args.ts_right_file, args.prefix_right
         )
 
     bag.close()
@@ -113,22 +110,45 @@ def main(args):
 def get_args():
     # Specify the bag file and topics
     parser = argparse.ArgumentParser(description="Extract images from a ROS bag.")
-    parser.add_argument("--bagfile", type=str, help="Input ROS bag.")
-    parser.add_argument("--img_left_topic", type=str, help="Left image topic")
-    parser.add_argument("--img_right_topic", type=str, help="Right image topic")
-    parser.add_argument("--img_outdir", type=str, help="Output directory for images")
-    parser.add_argument("--ts_outdir", type=str, help="Output directory for timestamps")
+    parser.add_argument("--bagfile", type=str, required=True, help="Input ROS bag.")
+    # Left image
+    parser.add_argument(
+        "--img_left_topic", type=str, required=True, help="Left image topic"
+    )
+    parser.add_argument(
+        "--img_left_outdir", type=str, required=True, help="Output directory (left img)"
+    )
+    parser.add_argument(
+        "--ts_left_file", type=str, required=True, help="Timestamp file (left img)"
+    )
+    parser.add_argument(
+        "--prefix_left", type=str, default="", help="Prefix for left images"
+    )
+    # Right image (optional)
+    parser.add_argument(
+        "--img_right_topic", type=str, help="Right image topic (optional)"
+    )
+    parser.add_argument(
+        "--img_right_outdir", type=str, help="Output directory (right img, optional)"
+    )
+    parser.add_argument(
+        "--ts_right_file", type=str, help="Timestamp file (right img, optional)"
+    )
+    parser.add_argument(
+        "--prefix_right", type=str, default="", help="Prefix for right images"
+    )
     parser.add_argument("--sync", action="store_true", help="Synchronize images")
     args = parser.parse_args()
 
-    args.left_outdir = pathlib.Path(args.img_outdir) / "left"
-    args.right_outdir = pathlib.Path(args.img_outdir) / "right"
-    args.left_ts_file = pathlib.Path(args.ts_outdir) / "img_left.txt"
-    args.right_ts_file = pathlib.Path(args.ts_outdir) / "img_right.txt"
-
+    args.left_outdir = pathlib.Path(args.img_left_outdir)
+    args.ts_left_file = pathlib.Path(args.ts_left_file)
     args.left_outdir.mkdir(parents=True, exist_ok=True)
-    args.right_outdir.mkdir(parents=True, exist_ok=True)
-    pathlib.Path(args.ts_outdir).mkdir(parents=True, exist_ok=True)
+    pathlib.Path(args.ts_left_file).parent.mkdir(parents=True, exist_ok=True)
+
+    if args.img_right_topic and args.img_right_outdir:
+        args.right_outdir = pathlib.Path(args.img_right_outdir)
+        args.ts_right_file = pathlib.Path(args.ts_right_file)
+        args.right_outdir.mkdir(parents=True, exist_ok=True)
 
     return args
 

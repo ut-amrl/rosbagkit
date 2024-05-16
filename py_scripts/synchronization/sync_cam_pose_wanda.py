@@ -7,7 +7,6 @@ import warnings
 
 import numpy as np
 
-sys.path.append(str(pathlib.Path(__file__).resolve().parents[2]))
 from utils.coda_utils import load_extrinsic_matrix
 from utils.lie_math import interpolate_SE3, matrix_to_xyz_quat, xyz_quat_to_matrix
 

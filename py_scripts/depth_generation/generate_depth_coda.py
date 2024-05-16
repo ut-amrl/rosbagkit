@@ -18,7 +18,6 @@ from scipy.spatial.transform import Rotation as R
 import cv2
 import matplotlib.pyplot as plt
 
-sys.path.append(str(pathlib.Path(__file__).resolve().parents[2]))
 from utils.coda_utils import load_extrinsic_matrix, load_camera_params
 from utils.depth import fill_depth_bins, densify_depth_image, save_depth_image
 from utils.camera import project_to_image

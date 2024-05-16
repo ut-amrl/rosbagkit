@@ -3,6 +3,7 @@ Author:      Dongmyeong Lee (domlee[at]utexas[dot]edu)
 Date:        Feb 20, 2024
 Description: Get global 3D bounding box from annotation of CODa dataset
 """
+
 import os
 from pathlib import Path
 import argparse

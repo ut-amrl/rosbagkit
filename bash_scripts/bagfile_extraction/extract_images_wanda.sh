@@ -4,7 +4,7 @@ PROJECT_DIR=$(realpath $(dirname "$0")/../..)
 IMG_LEFT_TOPIC="/wanda/stereo_left/image_rect_color/compressed"
 IMG_RIGHT_TOPIC="/wanda/stereo_right/image_rect_color/compressed"
 
-dataset_dir="/home/dongmyeong/Projects/datasets/SARA"
+dataset_dir="/home/dongmyeong/Projects/datasets/SARA/wanda"
 scenes=(
   gq_appld_south_tour_01_2024-03-14-10-08-34
   gq_appld_wandagq_32_field_foresttrail_06_2024-03-15-11-17-44
@@ -17,11 +17,15 @@ scenes=(
 trap "echo 'Script interrupted'; exit;" SIGINT
 
 for scene in "${scenes[@]}" ; do
-    python $PROJECT_DIR/py_scripts/bagfile_extraction/extract_images.py \
-        --bagfile=${dataset_dir}/bagfiles/${scene}.bag \
-        --img_left_topic=${IMG_LEFT_TOPIC} \
-        --img_right_topic=${IMG_RIGHT_TOPIC} \
-        --img_outdir=${dataset_dir}/2d_rct/${scene} \
-        --ts_outdir=${dataset_dir}/timestamps/${scene} \
-        --sync
+  python $PROJECT_DIR/py_scripts/bagfile_extraction/extract_images.py \
+    --bagfile=${dataset_dir}/bagfiles/${scene}.bag \
+    --img_left_topic=$IMG_LEFT_TOPIC \
+    --img_left_ourdir=$dataset_dir/2d_rect/$scene/left \
+    --ts_left_file=$dataset_dir/timestamps/$scene/img_left.txt \
+    --prefix_left="2d_rect_left_" \
+    --img_right_topic=$IMG_RIGHT_TOPIC \
+    --img_right_ourdir=$dataset_dir/2d_rect/$scene/right \
+    --ts_right_file=$dataset_dir/timestamps/$scene/img_right.txt \
+    --prefix_right="2d_rect_right_" \
+    --sync
 done

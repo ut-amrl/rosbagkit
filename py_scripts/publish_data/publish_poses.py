@@ -23,7 +23,6 @@ from thread_modules import (
     publish_static_map,
 )
 
-sys.path.append(str(pathlib.Path(__file__).resolve().parents[2]))
 from utils.ros_utils import wait_for_subscribers
 
 GLOBAL_FRAME = "map"

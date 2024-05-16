@@ -22,7 +22,6 @@ from sensor_msgs.msg import PointCloud2
 np.float = np.float32
 import ros_numpy
 
-sys.path.append(str(pathlib.Path(__file__).resolve().parents[2]))
 from utils.lie_math import xyz_quat_to_SE3, SE3_to_xyz_quat
 
 

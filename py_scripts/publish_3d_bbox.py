@@ -3,6 +3,7 @@ Author:      Dongmyeong Lee (domlee[at]utexas[dot]edu)
 Date:        Feb 20, 2024
 Description: Debug 3D bbox annotation
 """
+
 import os
 from pathlib import Path
 import argparse

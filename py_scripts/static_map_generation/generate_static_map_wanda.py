@@ -16,8 +16,6 @@ import pathlib
 import numpy as np
 import open3d as o3d
 
-
-sys.path.append(str(pathlib.Path(__file__).resolve().parents[2]))
 from utils.lie_math import xyz_quat_to_matrix
 
 

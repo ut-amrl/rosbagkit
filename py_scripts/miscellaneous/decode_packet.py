@@ -2,48 +2,18 @@
 Convert ouster/lidar_packet to pointcloud2
 Output: converted_<bagfile>.bag, <bagfile>/<frame>.bin, timestamps.txt
 """
+
 import os
 import argparse
 import itertools
 import yaml
 
 import numpy as np
-import rospy
 
-from sensor_msgs.msg import PointCloud2, PointField
 import rosbag
 from ouster import client
 
 from utils.msg_converter import np_to_pointcloud2
-
-
-def get_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--bagfile",
-        type=str,
-        default="/home/dongmyeong/Projects/AMRL/cs393r/bags/_2024-01-04-14-13-19.bag",
-        help="path to bag file",
-    )
-    parser.add_argument(
-        "--sensor_info",
-        type=str,
-        default="/home/dongmyeong/Projects/AMRL/coda-tools/config/OS1metadata.json",
-        help="path to sensor info json",
-    )
-    parser.add_argument(
-        "--packet_topic",
-        type=str,
-        default="/ouster/lidar_packets",
-        help="topic name of lidar packets to decode",
-    )
-    parser.add_argument(
-        "--pointcloud_topic",
-        type=str,
-        default="/ouster_points",
-        help="topic name of pointcloud as output",
-    )
-    return parser.parse_args()
 
 
 class BagDecoder(object):
@@ -162,11 +132,40 @@ class BagDecoder(object):
         self.output_bag.close()
 
 
-def main():
-    args = get_args()
+def main(args):
     bag_decoder = BagDecoder(args)
     bag_decoder.convert_bag()
 
 
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--bagfile",
+        type=str,
+        default="/home/dongmyeong/Projects/AMRL/cs393r/bags/_2024-01-04-14-13-19.bag",
+        help="path to bag file",
+    )
+    parser.add_argument(
+        "--sensor_info",
+        type=str,
+        default="/home/dongmyeong/Projects/AMRL/coda-tools/config/OS1metadata.json",
+        help="path to sensor info json",
+    )
+    parser.add_argument(
+        "--packet_topic",
+        type=str,
+        default="/ouster/lidar_packets",
+        help="topic name of lidar packets to decode",
+    )
+    parser.add_argument(
+        "--pointcloud_topic",
+        type=str,
+        default="/ouster_points",
+        help="topic name of pointcloud as output",
+    )
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    main()
+    args = get_args()
+    main(args)

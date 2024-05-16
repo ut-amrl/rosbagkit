@@ -12,7 +12,6 @@ import cv2
 from scipy.spatial.transform import Rotation as R
 from typing import Optional
 
-sys.path.append(os.path.join(os.path.dirname(__file__)))
 from utils.image import compute_iou
 
 

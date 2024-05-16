@@ -23,19 +23,17 @@ def save_camera_info(msg, outfile):
 
 
 def main(args):
-    print("* Extracting camera info from the bagfile ...")
-
     bag = rosbag.Bag(args.bagfile)
-    print(f"- Processing bagfile {args.bagfile} ...")
+    print(f"* Extracting camera info from bagfile {args.bagfile} ...")
+
+    topic_to_outfile = dict(zip(args.info_topics, args.outfiles))
 
     for topic, msg, t in bag.read_messages(topics=args.info_topics):
-        if topic == args.info_topics[0]:
-            save_camera_info(msg, args.outfiles[0])
-        elif topic == args.info_topics[1]:
-            save_camera_info(msg, args.outfiles[1])
+        if topic in args.info_topics:
+            save_camera_info(msg, topic_to_outfile[topic])
 
+        # Break if all the outfiles have been written
         if all(os.path.exists(outfile) for outfile in args.outfiles):
-            # Break if all the outfiles have been written
             break
 
     for outfile, info_topic in zip(args.outfiles, args.info_topics):

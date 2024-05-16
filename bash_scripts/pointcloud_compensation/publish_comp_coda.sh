@@ -30,7 +30,7 @@ for seq in "${sequences[@]}"; do
   # Start odometry_saver
   ( source $setup_ws2 && exec roslaunch odometry_saver online.launch \
     dataset:=coda save_pose_only:=false \
-    dst_directory:=${dataset_dir}/point_lio_results/${seq}  \
+    dst_directory:=${dataset_dir}/gicp_results/${seq}  \
     points_topic:=/ouster_points odom_topic:=/odom \
     endpoint_frame:=os1 origin_frame:=map) &
   PID2=$!

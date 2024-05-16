@@ -25,7 +25,6 @@ from thread_modules import (
     publish_tf,
 )
 
-sys.path.append(str(pathlib.Path(__file__).resolve().parents[2]))
 from utils.ros_utils import wait_for_subscribers
 
 GLOBAL_FRAME = "map"
@@ -102,9 +101,7 @@ def get_args():
     args.dataset_dir = pathlib.Path(args.dataset_dir)
     if args.dataset == "CODa":
         args.pc_dir = args.dataset_dir / "3d_comp" / "os1" / f"{args.scene}"
-        args.pose_file = (
-            args.dataset_dir / "poses" / "point_lio" / f"sync_{args.scene}.txt"
-        )
+        args.pose_file = args.dataset_dir / "poses" / "gicp" / f"{args.scene}.txt"
     elif args.dataset == "Wanda":
         args.pc_dir = args.dataset_dir / "3d_comp" / f"{args.scene}"
         args.pose_file = args.dataset_dir / "poses" / f"{args.scene}" / "os1.txt"

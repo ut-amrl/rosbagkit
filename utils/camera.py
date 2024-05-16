@@ -2,9 +2,6 @@ import sys
 import pathlib
 import numpy as np
 
-sys.path.append(str(pathlib.Path(__file__).resolve().parents[2]))
-from utils.visualization import visualize_pointcloud
-
 
 def project_to_image(img, pc, cam_ext, K, D):
     """
@@ -95,3 +92,26 @@ def project_to_rectified(img, pc, cam_ext, R, P):
     valid_indices = np.where(valid_pc)[0][in_bound]
 
     return pc_img[in_bound], pc_cam[valid_indices, 2], valid_indices
+
+
+def get_visible_cloud(pointcloud: np.ndarray, voxel_size=(0.1, 0.1, 0.1)):
+    import pcl
+
+    pc_pcl = pcl.PointCloud()
+    pc_pcl.from_array(pointcloud)
+    pc_pcl.sensor_origin = np.array([0, 0, 0, 1], dtype=np.float32)
+    pc_pcl.sensor_orientation = np.array([0, 0, 0, 1], dtype=np.float32)
+    voxel_filter = pcl.VoxelGridOcclusionEstimation.PointXYZ()
+    voxel_filter.setInputCloud(pc_pcl)
+    voxel_filter.setLeafSize(*voxel_size)
+    voxel_filter.initializeVoxelGrid()
+    occupied_voxels = pcl.vectors.PointXYZ()
+    voxel_filter.getOccupiedVoxels(occupied_voxels)
+
+    visible_cloud = np.array(occupied_voxels)
+
+
+if __name__ == "__main__":
+    # random point cloud
+    pointcloud = np.random.rand(100, 3).astype(np.float32)
+    get_visible_cloud(pointcloud)

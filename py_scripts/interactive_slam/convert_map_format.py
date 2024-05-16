@@ -12,17 +12,17 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 
-def load_keyframe_pose(keyframe_pose_file: str) -> np.ndarray:
+def load_keyframe_pose(keyframe_out_posefile: str) -> np.ndarray:
     """
     Load estimated pose from a keyframe file (.data) from interactive_slam
 
     Args:
-        keyframe_pose_file: Path to the (.data) file containing the estimated pose.
+        keyframe_out_posefile: Path to the (.data) file containing the estimated pose.
 
     Returns:
         keyframe_pose: (8,) estimated pose (timestamp, x, y, z, qw, qx, qy, qz)
     """
-    with open(keyframe_pose_file, "r") as f:
+    with open(keyframe_out_posefile, "r") as f:
         lines = f.readlines()
 
         # timestamp
@@ -49,8 +49,8 @@ def main(args):
 
     # Get the keyframe poses
     keyframe_poses = np.zeros((len(keyframes_files), 8))
-    for i, keyframe_pose_file in enumerate(keyframes_files):
-        keyframe_poses[i] = load_keyframe_pose(keyframe_pose_file)
+    for i, keyframe_out_posefile in enumerate(keyframes_files):
+        keyframe_poses[i] = load_keyframe_pose(keyframe_out_posefile)
     sorted_keyframes = keyframe_poses[keyframe_poses[:, 0].argsort()]
 
     # remove duplicates rows
@@ -58,8 +58,8 @@ def main(args):
     poses = sorted_keyframes[idx]
 
     # Save the keyframe poses
-    np.savetxt(args.pose_file, poses, fmt="%.6f %.8f %.8f %.8f %.8f %.8f %.8f %.8f")
-    print(f"Saved {args.pose_file}")
+    np.savetxt(args.out_posefile, poses, fmt="%.6f %.8f %.8f %.8f %.8f %.8f %.8f %.8f")
+    print(f"Saved {args.out_posefile}")
 
 
 def get_args():
@@ -73,7 +73,7 @@ def get_args():
     args = parser.parse_args()
 
     args.map_dir = Path(args.map_dir)
-    args.pose_file = args.map_dir.parent / f"{args.map_dir.name}.txt"
+    args.out_posefile = args.map_dir.parent / f"{args.map_dir.name}.txt"
     return args
 
 

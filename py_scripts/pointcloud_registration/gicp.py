@@ -17,7 +17,6 @@ import open3d as o3d
 import pygicp  # https://github.com/SMRT-AIST/fast_gicp
 import matplotlib.pyplot as pyplot
 
-sys.path.append(str(pathlib.Path(__file__).resolve().parents[2]))
 from utils.lie_math import xyz_quat_to_matrix, matrix_to_xyz_quat
 
 

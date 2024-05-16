@@ -17,7 +17,6 @@ from scipy.spatial.transform import Rotation as R
 import cv2
 import matplotlib.pyplot as plt
 
-sys.path.append(str(pathlib.Path(__file__).resolve().parents[2]))
 from utils.coda_utils import load_extrinsic_matrix, load_camera_params
 from utils.image import get_disparity_map, draw_epipolar_lines
 from utils.depth import fill_depth_bins, densify_depth_image, save_depth_image
@@ -85,7 +84,7 @@ def compute_stereo_depth(
     # 2. Compute the depth map with disparity map
     get_disparity_map(img_left, img_right)
 
-    densified_depth_left = densify_depth_image(depth_bins_left) 
+    densified_depth_left = densify_depth_image(depth_bins_left)
     densified_depth_right = densify_depth_image(depth_bins_right)
 
     return densified_depth_left, densified_depth_right
@@ -150,6 +149,9 @@ def main(args):
         upper_pc_idx = np.searchsorted(data["poses"][:, 0], left_pose[0], side="right")
         for pc_idx in range(last_pc_idx + 1, upper_pc_idx):
             pc = np.fromfile(data["pc_files"][pc_idx], dtype=np.float32).reshape(-1, 3)
+            print(
+                f"Loaded point cloud: {data['pc_files'][pc_idx]} ({pc.shape[0]} points)"
+            )
             H_lw = xyz_quat_to_matrix(data["poses"][pc_idx][1:])
 
             # Transform the point cloud to the world frame

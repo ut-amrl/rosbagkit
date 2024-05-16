@@ -10,7 +10,6 @@ from nav_msgs.msg import Path
 from sensor_msgs.msg import PointCloud2
 import tf2_ros
 
-sys.path.append(str(pathlib.Path(__file__).resolve().parents[2]))
 from utils.msg_converter import (
     np_to_pointcloud2,
     np_to_imu,
