@@ -74,9 +74,11 @@ typename pcl::PointCloud<PointT>::Ptr loadBinPointCloud(const std::string& fileP
 void filterOccludedPoints(const pcl::PointCloud<pcl::PointXYZ>::Ptr cloud,
                           const Eigen::Vector3f& camOrigin,
                           const Eigen::Quaternionf& camOrientation,
-                          pcl::PointCloud<pcl::PointXYZ>::Ptr filteredCloud,
+                          pcl::PointCloud<pcl::PointXYZ>::Ptr& filteredCloud,
                           float leafSize = 0.1f,
-                          bool visualize = true) {
+                          bool visualize = false) {
+  assert(leafSize > 0);
+  filteredCloud->clear();
   if (!cloud || cloud->empty()) {
     std::cerr << "ERROR: Point cloud is empty" << std::endl;
     return;
@@ -87,30 +89,28 @@ void filterOccludedPoints(const pcl::PointCloud<pcl::PointXYZ>::Ptr cloud,
   cloud->sensor_orientation_ = camOrientation;
 
   // Create a voxel grid filter
-  pcl::VoxelGridOcclusionEstimation<pcl::PointXYZ> voxelFilter;
-  voxelFilter.setInputCloud(cloud);
-  voxelFilter.setLeafSize(leafSize, leafSize, leafSize);
-  voxelFilter.initializeVoxelGrid();
+  pcl::VoxelGridOcclusionEstimation<pcl::PointXYZ> voxelGrid;
+  voxelGrid.setInputCloud(cloud);
+  voxelGrid.setLeafSize(leafSize, leafSize, leafSize);
+  voxelGrid.initializeVoxelGrid();
 
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr coloredCloud(
       new pcl::PointCloud<pcl::PointXYZRGB>);
-  filteredCloud->clear();
   for (const auto& p : cloud->points) {
-    Eigen::Vector3i gridCoordinates = voxelFilter.getGridCoordinates(p.x, p.y, p.z);
+    Eigen::Vector3i gridCoordinates = voxelGrid.getGridCoordinates(p.x, p.y, p.z);
     int state;
-    voxelFilter.occlusionEstimation(state, gridCoordinates);
+    voxelGrid.occlusionEstimation(state, gridCoordinates);
 
-    if (state == 0) {  // Non-occluded
-      filteredCloud->push_back(p);
-    }
+    bool is_occluded = (state == 1);
+    if (!is_occluded) filteredCloud->push_back(p);
 
     if (visualize) {
       pcl::PointXYZRGB coloredPoint;
       coloredPoint.x = p.x;
       coloredPoint.y = p.y;
       coloredPoint.z = p.z;
-      coloredPoint.r = state == 0 ? 0 : 255;  // red if occluded, green if not
-      coloredPoint.g = state == 0 ? 255 : 0;
+      coloredPoint.r = is_occluded ? 255 : 0;
+      coloredPoint.g = is_occluded ? 0 : 255;
       coloredPoint.b = 0;
       coloredCloud->push_back(coloredPoint);
     }
@@ -124,6 +124,7 @@ void filterOccludedPoints(const pcl::PointCloud<pcl::PointXYZ>::Ptr cloud,
     Eigen::Affine3f sensorPose = Eigen::Translation3f(camOrigin) * camOrientation;
     viewer.addCoordinateSystem(2.0, sensorPose, "sensor frame", 0);
     viewer.spin();
+    viewer.close();
   }
 }
 

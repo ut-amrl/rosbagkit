@@ -4,17 +4,14 @@ Date:   Apr 23, 2024
 Description: Motion compensation for pointclouds (ouster) using high-frequency poses
 """
 
-import sys
 import argparse
 import pathlib
 import warnings
 from tqdm import tqdm
-import time
 
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-import rospy
 import rosbag
 from sensor_msgs.msg import PointCloud2
 
@@ -22,26 +19,10 @@ from sensor_msgs.msg import PointCloud2
 np.float = np.float32
 import ros_numpy
 
-from utils.lie_math import xyz_quat_to_SE3, SE3_to_xyz_quat
+from utils.pose_interpolator import PoseInterpolator
 
 
-def get_closest_poses(poses, ts):
-    upper_pose_idx = np.searchsorted(poses[:, 0], ts, side="right")
-    lower_pose_idx = upper_pose_idx - 1
-    if upper_pose_idx == len(poses) or lower_pose_idx == -1:
-        warnings.warn(f"No pose range found for {ts}. Assume there is no motion")
-        if upper_pose_idx == len(poses):
-            lower_pose_idx = upper_pose_idx = len(poses) - 1
-        elif lower_pose_idx == -1:
-            lower_pose_idx = upper_pose_idx = 0
-
-    # Get the lower and upper poses
-    lower_pose = poses[lower_pose_idx]
-    upper_pose = poses[upper_pose_idx]
-    return lower_pose, upper_pose
-
-
-def motion_compensation(pc_msg, poses):
+def motion_compensation(pc_msg, pose_interpolator):
     # Convert the pointcloud message to numpy array
     # NOTE: the unit of the timestamp is in nanoseconds
     scan_ts = pc_msg.header.stamp.to_sec()
@@ -68,40 +49,23 @@ def motion_compensation(pc_msg, poses):
     }
 
     # Check if the scan_ts is within the pose range
-    lower_pose, upper_pose = get_closest_poses(poses, scan_ts)
-    if lower_pose[0] == upper_pose[0]:
-        base_pose = np.array([scan_ts] + list(lower_pose[1:]))
-        return pc_xyz, base_pose
+    if not pose_interpolator.is_time_in_range(scan_ts):
+        return pc_xyz, pose_interpolator.get_interpolated_pose(scan_ts)
 
-    # pose at the scan_ts
-    lower_SE3 = xyz_quat_to_SE3(lower_pose[1:])
-    upper_SE3 = xyz_quat_to_SE3(upper_pose[1:])
-    t = (scan_ts - lower_pose[0]) / (upper_pose[0] - lower_pose[0])
-    base_SE3 = lower_SE3 + t * (upper_SE3 - lower_SE3)
-
-    comp_pc = np.zeros_like(pc_xyz)
+    compensated_pc = np.zeros_like(pc_xyz)
     for timestamp in unique_timestamps:
-        # Find the closest pose
-        lower_pose, upper_pose = get_closest_poses(poses, timestamp)
-        lower_SE3 = xyz_quat_to_SE3(lower_pose[1:])
-        upper_SE3 = xyz_quat_to_SE3(upper_pose[1:])
-
-        # Interpolate the pose if the timestamp is in between the lower and upper poses
-        curr_SE3 = lower_SE3
-        if lower_pose[0] != upper_pose[0]:
-            t = (timestamp - lower_pose[0]) / (upper_pose[0] - lower_pose[0])
-            curr_SE3 = lower_SE3 + t * (upper_SE3 - lower_SE3)
-
-        relative_SE3 = base_SE3.between(curr_SE3)
-        relative_matrix = relative_SE3.transform()
-        curr_pc = np.hstack(
+        source_pc = np.hstack(
             [pc_xyz[pc_groups[timestamp]], np.ones((len(pc_groups[timestamp]), 1))]
         )
-        comp_pc[pc_groups[timestamp]] = curr_pc @ relative_matrix[:3].T
+
+        relative_transform = pose_interpolator.get_relative_transform(
+            source_time=timestamp, target_time=scan_ts
+        )
+
+        compensated_pc[pc_groups[timestamp]] = source_pc @ relative_transform[:3].T
 
     # pose at the scan_ts
-    base_pose = np.array([scan_ts] + list(SE3_to_xyz_quat(base_SE3)))
-    return comp_pc, base_pose
+    return compensated_pc, pose_interpolator.get_interpolated_pose(scan_ts)
 
 
 def main(args):
@@ -112,40 +76,37 @@ def main(args):
         list(bag.read_messages(topics=[args.pc_topic])),
         key=lambda x: x.message.header.stamp,
     )
-    print(f"Loaded {len(pc_msgs)} pointcloud messages")
+    print(f" * Loaded {len(pc_msgs)} pointcloud messages")
 
     # Load the poses
-    dense_poses = np.loadtxt(args.dense_posefile)  # timestamp, x, y, z, qw, qx, qy, qz
-    print(f"Loaded {len(dense_poses)} poses")
+    ref_poses = np.loadtxt(args.ref_posefile)  # timestamp, x, y, z, qw, qx, qy, qz
+    print(f" * Loaded {len(ref_poses)} LiDAR poses")
+
+    # Create the pose interpolator
+    pose_interpolator = PoseInterpolator(ref_poses)
 
     # Interpolate the poses
     timestamps = []
     poses = []
-    frame = 0
-    for idx, pc_msg in tqdm(enumerate(pc_msgs), total=len(pc_msgs)):
-        pc_timestamp = pc_msg.message.header.stamp.to_sec()
-        timestamps.append(pc_timestamp)
-
+    for frame, pc_msg in tqdm(enumerate(pc_msgs), total=len(pc_msgs)):
         # Motion compensation
-        comp_pc, pose = motion_compensation(pc_msg.message, dense_poses)
+        compensated_pc, pose = motion_compensation(pc_msg.message, pose_interpolator)
 
-        if comp_pc.shape[0] == 0:
-            warnings.warn(f"Empty pointcloud at {pc_timestamp}")
+        if compensated_pc.shape[0] == 0:
+            warnings.warn(f"Empty pointcloud at {pc_msg.message.header.stamp.to_sec()}")
             continue
 
-        # Save the synchronized pose
+        # Save the pose at the scan timestamp
+        timestamps.append(pc_msg.message.header.stamp.to_sec())
         poses.append(pose)
+        assert pose[0] == pc_msg.message.header.stamp.to_sec()
 
         # Save the compensated pointcloud
         pc_outfile = args.out_pc_dir / f"3d_comp_os1_{frame}.bin"
-        comp_pc.astype(np.float32).tofile(pc_outfile)
+        compensated_pc.astype(np.float32).tofile(pc_outfile)
 
-        frame += 1
-
-    # Save the poses
+    # Save the poses and timestamps
     np.savetxt(args.out_posefile, poses, fmt="%.6f %.8f %.8f %.8f %.8f %.8f %.8f %.8f")
-
-    # Save the timestamps
     np.savetxt(args.out_timestamps, timestamps, fmt="%.6f")
 
     print(f"{frame} pointclouds are compensated and saved to {args.out_pc_dir}")
@@ -155,7 +116,7 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--bagfile", type=str, required=True)
     parser.add_argument("--pc_topic", type=str, required=True)
-    parser.add_argument("--dense_posefile", type=str, required=True)
+    parser.add_argument("--ref_posefile", type=str, required=True)
     parser.add_argument("--out_pc_dir", type=str, required=True)
     parser.add_argument("--out_timestamps", type=str)
     parser.add_argument("--out_posefile", type=str)

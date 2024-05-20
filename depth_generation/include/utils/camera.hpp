@@ -4,12 +4,16 @@
 #include <opencv2/core.hpp>
 #include <yaml-cpp/yaml.h>
 
-bool loadMatrix(const YAML::Node& node, cv::Mat& mat, int rows, int cols) {
-  if (!node["data"]) {
+bool loadMatrix(const YAML::Node& node, cv::Mat& mat) {
+  if (!node["data"] || !node["rows"] || !node["cols"]) {
     std::cerr << "Error: Missing 'data' key." << std::endl;
     return false;
   }
+
   auto data = node["data"].as<std::vector<double>>();
+  int rows = node["rows"].as<int>();
+  int cols = node["cols"].as<int>();
+
   if (data.size() != rows * cols) {
     std::cerr << "Error: Expected " << rows * cols << " elements, but found "
               << data.size() << "." << std::endl;
@@ -40,16 +44,16 @@ void loadCamParams(const std::string& configFile,
   }
 
   // Load camera matrix
-  if (!loadMatrix(config["camera_matrix"], camParams["K"], 3, 3)) return;
+  if (!loadMatrix(config["camera_matrix"], camParams["K"])) return;
 
   // Load distortion coefficients
-  if (!loadMatrix(config["distortion_coefficients"], camParams["D"], 1, 5)) return;
+  if (!loadMatrix(config["distortion_coefficients"], camParams["D"])) return;
 
   // Load rectification matrix
-  if (!loadMatrix(config["rectification_matrix"], camParams["R"], 3, 3)) return;
+  if (!loadMatrix(config["rectification_matrix"], camParams["R"])) return;
 
   // Load projection matrix
-  if (!loadMatrix(config["projection_matrix"], camParams["P"], 3, 4)) return;
+  if (!loadMatrix(config["projection_matrix"], camParams["P"])) return;
 
   if (FLAGS_v > 0) {
     std::cout << "Loaded camera parameters from " << configFile << std::endl;

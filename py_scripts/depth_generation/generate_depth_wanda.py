@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 from utils.coda_utils import load_extrinsic_matrix, load_camera_params
 from utils.image import get_disparity_map, draw_epipolar_lines
 from utils.depth import fill_depth_bins, densify_depth_image, save_depth_image
-from utils.camera import project_to_image, project_to_rectified
+from utils.projection import project_to_image, project_to_rectified
 from utils.transforms import xyz_quat_to_matrix
 from utils.visualization import (
     visualize_pointcloud,
@@ -58,6 +58,7 @@ def compute_stereo_depth(
             H_wc_left,
             data["cam_left"]["R"],
             data["cam_left"]["P"],
+            debug,
         )
         pc_img_right, pc_depth_right, valid_right = project_to_rectified(
             img_right,
@@ -65,6 +66,7 @@ def compute_stereo_depth(
             H_wc_right,
             data["cam_right"]["R"],
             data["cam_right"]["P"],
+            debug,
         )
 
         # Accumulate the depth bins
@@ -82,7 +84,7 @@ def compute_stereo_depth(
         print("ratio of non-nan pixels (right): ", non_nan_right / (H * W))
 
     # 2. Compute the depth map with disparity map
-    get_disparity_map(img_left, img_right)
+    # get_disparity_map(img_left, img_right)
 
     densified_depth_left = densify_depth_image(depth_bins_left)
     densified_depth_right = densify_depth_image(depth_bins_right)
@@ -114,6 +116,9 @@ def load_data(args):
     cam_left = load_camera_params(args.cam_left_intrinsics)
     cam_right = load_camera_params(args.cam_right_intrinsics)
 
+    print("Camera left intrinsics:")
+    print(cam_left)
+
     data = {
         "pc_files": pc_files,
         "poses": poses,
@@ -136,7 +141,7 @@ def main(args):
     pc_world_window = deque(maxlen=args.window)
     last_pc_idx = -1
 
-    for i in range(len(data["img_left_files"]))[-10:]:
+    for i in range(len(data["img_left_files"]))[5000:]:
         img_left = cv2.imread(str(data["img_left_files"][i]))
         img_right = cv2.imread(str(data["img_right_files"][i]))
         left_pose = data["left_poses"][i]

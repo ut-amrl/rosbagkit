@@ -4,11 +4,6 @@ project(depth_generation)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# # Set Boost path
-# set(Boost_NO_SYSTEM_PATHS ON)
-# set(Boost_USE_STATIC_LIBS ON)
-# find_package(Boost REQUIRED COMPONENTS filesystem)
-
 # Find packages
 find_package(PCL CONFIG REQUIRED)
 find_package(OpenCV REQUIRED)

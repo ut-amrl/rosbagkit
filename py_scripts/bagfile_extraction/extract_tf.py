@@ -6,10 +6,9 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 import rospy
-import rosbag
 import tf2_ros
 
-from utils.ros_utils import log_tf
+from utils.ros_utils import play_bagfile
 
 
 def save_extrinsic_matrix(matrix, outfile):
@@ -25,57 +24,62 @@ def save_extrinsic_matrix(matrix, outfile):
         yaml.dump(matrix_dict, default_flow_style=None, sort_keys=False, stream=f)
 
 
-def get_transform(tf_buffer, source_frame, target_frame, time):
+def get_transform(tf_buffer, source_frame, target_frame):
     """Retrieve and return the transform from the tf buffer."""
     try:
-        transform = tf_buffer.lookup_transform(target_frame, source_frame, time)
+        transform = tf_buffer.lookup_transform(
+            target_frame, source_frame, rospy.Time(0), rospy.Duration(1.0)
+        )
         trans = transform.transform.translation
         rot = transform.transform.rotation
         return trans, rot
     except tf2_ros.LookupException:
         rospy.logwarn(
-            f"Transform not found for {time.to_sec()}: {source_frame} to {target_frame}"
+            f"Transform not found for {rospy.Time(0)}: {source_frame} to {target_frame}"
         )
         return None, None
     except tf2_ros.ExtrapolationException:
-        rospy.logwarn(f"Extrapolation needed but not possible for {time.to_sec()}")
+        rospy.logwarn(f"Extrapolation needed but not possible for {rospy.Time(0)}")
         return None, None
 
 
 def main(args):
-    rospy.set_param("use_sim_time", True)
     rospy.init_node("extract_tf", anonymous=True)
-    tf_buffer = tf2_ros.Buffer()
-    tf_listener = tf2_ros.TransformListener(tf_buffer)
+    bag_process = play_bagfile(args.bagfile, use_sim_time=True, silent=True)
 
-    timestamps = log_tf(tf_buffer, args.bagfile, args.timelimit)
+    tf_buffer = tf2_ros.Buffer(cache_time=rospy.Duration(100))
+    tf_listener = tf2_ros.TransformListener(tf_buffer)
+    rospy.sleep(3)
 
     for transform in args.transforms:
+        if rospy.is_shutdown():
+            break
+
         source_frame = transform["source_frame"]
         target_frame = transform["target_frame"]
         outfile = transform["outfile"]
 
-        for t in timestamps:
-            trans, rot = get_transform(tf_buffer, source_frame, target_frame, t)
-            if trans is not None and rot is not None:
-                print(f"Transform found for {source_frame} -> {target_frame}")
-                break
+        trans, rot = get_transform(tf_buffer, source_frame, target_frame)
+        if trans is not None and rot is not None:
+            print(f"Transform received: {source_frame} -> {target_frame}")
+            print(f"Trans (x, y, z): {trans.x}, {trans.y}, {trans.z}")
+            print(f"Quat (qw, qx, qy, qz): {rot.w}, {rot.x}, {rot.y}, {rot.z}")
+
+            transformation = np.eye(4)
+            transformation[:3, 3] = np.array([trans.x, trans.y, trans.z])
+            transformation[:3, :3] = R.from_quat(
+                [rot.x, rot.y, rot.z, rot.w]
+            ).as_matrix()
+
+            save_extrinsic_matrix(transformation, outfile)
+            print(f"Saved extrinsic matrix to {outfile}", end="\n")
 
         if trans is None or rot is None:
             print(f"Could not find transform from {source_frame} to {target_frame}")
             continue
 
-        print(f"Transform received: {source_frame} -> {target_frame}")
-        print(f"Trans (x, y, z): {trans.x}, {trans.y}, {trans.z}")
-        print(f"Quat (qw, qx, qy, qz): {rot.w}, {rot.x}, {rot.y}, {rot.z}")
-
-        transformation = np.eye(4)
-        transformation[:3, 3] = np.array([trans.x, trans.y, trans.z])
-        transformation[:3, :3] = R.from_quat([rot.x, rot.y, rot.z, rot.w]).as_matrix()
-
-        save_extrinsic_matrix(transformation, outfile)
-
     print("* Finished extracting transforms")
+    bag_process.terminate()
 
 
 def get_args():

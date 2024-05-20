@@ -39,12 +39,12 @@ from utils.msg_converter import (
     tf_msg_from_quat,
 )
 from utils.geometry import (
-    transform_bbox_3d,
+    transform_3d_bbox,
     filter_points_inside_bbox_3d,
 )
 from utils.image import compute_overlap, ratio_within_image
 from utils.ros_viz_utils import (
-    create_bbox_3d_marker,
+    create_3d_bbox_marker,
     create_filled_bbox_3d_marker,
     clear_marker_array,
 )
@@ -243,7 +243,7 @@ def load_kdtree_3d_bbox(args) -> dict:
         for class_name in object_pubs.keys():
             marker_array = MarkerArray()
             for bbox in bboxes_3d[class_name]:
-                bbox_marker = create_bbox_3d_marker(
+                bbox_marker = create_3d_bbox_marker(
                     bbox_3d=bbox[1],
                     frame_id="map",
                     marker_id=bbox[0],
@@ -661,7 +661,7 @@ def main():
                 for class_name, indices in queried_indices.items():
                     for idx in indices:
                         instance_id, instance_bbox = bboxes_3d[class_name][idx]
-                        bbox_3d_lidar = transform_bbox_3d(instance_bbox, T_gl)
+                        bbox_3d_lidar = transform_3d_bbox(instance_bbox, T_gl)
 
                         # Get 2D Bounding Box by projecting 3D Bounding Box
                         bbox_2d, points_in_bbox = get_bbox_2d(

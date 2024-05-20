@@ -17,6 +17,7 @@ from geometry_msgs.msg import TransformStamped, Vector3, Quaternion
 def play_bagfile(
     bagfile: str, use_sim_time: bool = True, silent: bool = False
 ) -> subprocess.Popen:
+    print(f"Playing bagfile: {bagfile}")
 
     if use_sim_time:
         rospy.set_param("use_sim_time", True)
@@ -72,7 +73,7 @@ def log_tf(tf_buffer: tf2_ros.Buffer, bagfile: str, time_limit: Optional[float] 
     timestamps = []
 
     for _, msg, t in bag.read_messages(topics=["/tf", "/tf_static"]):
-        timestamps.append(t)
+        timestamps.append(t.to_sec())
         if start_time is None:
             start_time = t
         if (t - start_time).to_sec() > time_limit:

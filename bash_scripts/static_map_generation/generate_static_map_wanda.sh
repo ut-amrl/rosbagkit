@@ -1,7 +1,7 @@
 #!/bin/bash
 PROJECT_DIR=$(realpath $(dirname "$0")/../..)
 
-dataset_dir="/home/dongmyeong/Projects/datasets/SARA"
+dataset_dir="/home/dongmyeong/Projects/datasets/SARA/wanda"
 scenes=(
   gq_appld_south_tour_01_2024-03-14-10-08-34
   gq_appld_wandagq_32_field_foresttrail_06_2024-03-15-11-17-44
@@ -16,5 +16,5 @@ trap "echo 'Script interrupted'; exit;" SIGINT
 for scene in "${scenes[@]}" ; do
   python $PROJECT_DIR/py_scripts/static_map_generation/generate_static_map_wanda.py \
     --dataset_dir=${dataset_dir} --scene=${scene} \
-    --blind 20.0 --voxel_size 1.0 --nb_neighbors 100 --std_ratio 1.0 --visualize
+    --blind=20.0 --voxel_size=0.5 --nb_neighbors=10 --std_ratio=1.0 --visualize
 done

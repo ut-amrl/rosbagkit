@@ -40,10 +40,7 @@ def publish_clock(clock_pub, shared_clock, timestamps, rate=1000):
     last_time = rospy.Time.from_sec(timestamps[-1] + 1.0)
     total_duration = (last_time - curr_time).to_sec()
 
-    while curr_time < last_time:
-        if rospy.is_shutdown():
-            break
-
+    while curr_time < last_time and not rospy.is_shutdown():
         clock_pub.publish(Clock(curr_time))
         shared_clock.set_time(curr_time)
 
@@ -55,9 +52,9 @@ def publish_clock(clock_pub, shared_clock, timestamps, rate=1000):
         curr_time += interval
 
 
-def publish_imu(imu_pub, imu_data, shared_clock):
+def publish_imu(imu_pub, imu_data, shared_clock, rate=1000):
     imu_last_idx = 0
-    while not rospy.is_shutdown() and imu_last_idx < len(imu_data):
+    while imu_last_idx < len(imu_data) and not rospy.is_shutdown():
         current_time = shared_clock.get_time()
         if current_time:
             while (
@@ -68,14 +65,21 @@ def publish_imu(imu_pub, imu_data, shared_clock):
                 imu_msg = np_to_imu(imu_data[imu_last_idx][1:], "imu_link", ts)
                 imu_pub.publish(imu_msg)
                 imu_last_idx += 1
-        time.sleep(0.01)
+        time.sleep(1.0 / rate)
 
 
 def publish_pointcloud(
-    pc_pub, pc_files, timestamps, frame_id, shared_clock, compensated=False
+    pc_pub,
+    pc_files,
+    timestamps,
+    frame_id,
+    shared_clock,
+    compensated=False,
+    blind=0.0,
+    rate=100,
 ):
     pc_last_idx = 0
-    while not rospy.is_shutdown() and pc_last_idx < len(pc_files):
+    while pc_last_idx < len(pc_files) and not rospy.is_shutdown():
         current_time = shared_clock.get_time()
         if current_time:
             while (
@@ -86,20 +90,27 @@ def publish_pointcloud(
                 dt = (
                     timestamps[pc_last_idx + 1] - timestamps[pc_last_idx]
                     if pc_last_idx + 1 < len(timestamps)
-                    else 0.1
+                    else timestamps[pc_last_idx] - timestamps[pc_last_idx - 1]
                 )
                 ts = rospy.Time.from_sec(timestamps[pc_last_idx])
                 if compensated:
+                    # TODO: check pointcloud format (x, y, z)
                     pc_np = np.fromfile(pc_file, dtype=np.float32).reshape(-1, 3)
+
+                    # filter out points with range less than blind
+                    valid = np.linalg.norm(pc_np[:, :2], axis=1) > blind
+                    pc_np = pc_np[valid]
+
+                    # add intensity placeholder
                     pc_np = np.hstack(
                         (pc_np, np.zeros((len(pc_np), 1), dtype=np.float32))
-                    )  # intensity placeholder
+                    )
                     pc_msg = np_to_pointcloud2(pc_np, "x y z intensity", frame_id, ts)
                 else:
                     pc_msg = process_pointcloud(pc_file, dt * 1e9, frame_id, ts)
                 pc_pub.publish(pc_msg)
                 pc_last_idx += 1
-        time.sleep(0.1)
+        time.sleep(1.0 / rate)
 
 
 def process_pointcloud(bin_path, dt, frame_id, timestamp):
@@ -133,12 +144,14 @@ def process_pointcloud(bin_path, dt, frame_id, timestamp):
     )
 
 
-def publish_odom(odom_pub, path_pub, pose_np, frame_id, child_frame_id, shared_clock):
+def publish_odom(
+    odom_pub, path_pub, pose_np, frame_id, child_frame_id, shared_clock, rate=1000
+):
     global_path = Path()
     global_path.header.frame_id = frame_id
 
     pose_last_idx = 0
-    while not rospy.is_shutdown() and pose_last_idx < len(pose_np):
+    while pose_last_idx < len(pose_np) and not rospy.is_shutdown():
         current_time = shared_clock.get_time()
         if current_time:
             while (
@@ -163,16 +176,14 @@ def publish_odom(odom_pub, path_pub, pose_np, frame_id, child_frame_id, shared_c
                 )
                 global_path.poses.append(pose_msg)
                 path_pub.publish(global_path)
-
                 pose_last_idx += 1
+        time.sleep(1.0 / rate)
 
-        time.sleep(0.01)
 
-
-def publish_tf(tf_broadcaster, pose_np, frame_id, child_frame_id, shared_clock):
+def publish_tf(pose_np, frame_id, child_frame_id, shared_clock, rate=1000):
     tf_broadcaster = tf2_ros.TransformBroadcaster()
     pose_last_idx = 0
-    while not rospy.is_shutdown() and pose_last_idx < len(pose_np):
+    while pose_last_idx < len(pose_np) and not rospy.is_shutdown():
         current_time = shared_clock.get_time()
         if current_time:
             while (
@@ -189,8 +200,7 @@ def publish_tf(tf_broadcaster, pose_np, frame_id, child_frame_id, shared_clock):
                 )
                 tf_broadcaster.sendTransform(tf_msg)
                 pose_last_idx += 1
-
-        time.sleep(0.01)
+        time.sleep(1.0 / rate)
 
 
 def publish_static_map(map_file, frame_id):

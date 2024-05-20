@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 
 from utils.coda_utils import load_extrinsic_matrix, load_camera_params
 from utils.depth import fill_depth_bins, densify_depth_image, save_depth_image
-from utils.camera import project_to_image
+from utils.projection import project_to_image
 from utils.transforms import xyz_quat_to_matrix
 from utils.visualization import (
     visualize_pointcloud,

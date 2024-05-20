@@ -1,6 +1,6 @@
-import sys
-import pathlib
 import numpy as np
+
+from utils.visualization import draw_points_on_image
 
 
 def project_to_image(img, pc, cam_ext, K, D):
@@ -54,7 +54,7 @@ def project_to_image(img, pc, cam_ext, K, D):
     return pc_img[in_bound, :2], pc_cam[valid_indices, 2], valid_indices
 
 
-def project_to_rectified(img, pc, cam_ext, R, P):
+def project_to_rectified(img, pc, cam_ext, R, P, visualize=False):
     """
     Project the point cloud to the rectified image
 
@@ -75,7 +75,7 @@ def project_to_rectified(img, pc, cam_ext, R, P):
     # Transform points to camera coordinate system
     pc_cam = np.hstack((pc, np.ones((len(pc), 1))))  # (N, 4) homogeneous coordinates
     pc_cam = pc_cam @ cam_ext[:3].T  # (N, 3) camera coordinates
-    valid_pc = np.logical_and(pc_cam[:, 2] > 0, pc_cam[:, 2] < 10)
+    valid_pc = pc_cam[:, 2] > 0
 
     # Project points onto the image plane
     pc_img = pc_cam[valid_pc] @ R.T
@@ -91,27 +91,7 @@ def project_to_rectified(img, pc, cam_ext, R, P):
 
     valid_indices = np.where(valid_pc)[0][in_bound]
 
+    if visualize:
+        draw_points_on_image(img, pc_img[in_bound], pc_cam[valid_indices, 2])
+
     return pc_img[in_bound], pc_cam[valid_indices, 2], valid_indices
-
-
-def get_visible_cloud(pointcloud: np.ndarray, voxel_size=(0.1, 0.1, 0.1)):
-    import pcl
-
-    pc_pcl = pcl.PointCloud()
-    pc_pcl.from_array(pointcloud)
-    pc_pcl.sensor_origin = np.array([0, 0, 0, 1], dtype=np.float32)
-    pc_pcl.sensor_orientation = np.array([0, 0, 0, 1], dtype=np.float32)
-    voxel_filter = pcl.VoxelGridOcclusionEstimation.PointXYZ()
-    voxel_filter.setInputCloud(pc_pcl)
-    voxel_filter.setLeafSize(*voxel_size)
-    voxel_filter.initializeVoxelGrid()
-    occupied_voxels = pcl.vectors.PointXYZ()
-    voxel_filter.getOccupiedVoxels(occupied_voxels)
-
-    visible_cloud = np.array(occupied_voxels)
-
-
-if __name__ == "__main__":
-    # random point cloud
-    pointcloud = np.random.rand(100, 3).astype(np.float32)
-    get_visible_cloud(pointcloud)

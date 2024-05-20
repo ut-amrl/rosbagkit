@@ -9,3 +9,11 @@
 
 2. Get High-Frequency LiDAR Odometry (/w [Point-LIO](https://github.com/ut-amrl/Point-LIO) and [odometry_saver](git@github.com:ut-amrl/odometry_saver.git))
    - Example: `./bash_scripts/LiDAR-Inertial-Odometry/run_point_lio_coda.sh`
+
+3. Compensate PointCloud with the high-frequency Odometry
+   - Example: `./bash_scripts/pointcloud_compensation/compensate_pointcloud_coda.sh`
+
+## Interactive SLAM for global graph optimization
+
+1. Convert Odometry and Compensated Pointcloud
+

@@ -4,12 +4,9 @@ Date:        Apr 24, 2024
 Description: Generate static map by accumulating pointclouds and downsampling
 """
 
-import os
-import sys
 import pathlib
 import argparse
 from tqdm import tqdm
-import time
 from natsort import natsorted
 import pathlib
 
@@ -21,16 +18,17 @@ from utils.lie_math import xyz_quat_to_matrix
 
 def accumulate_pointcloud(pc_files, pose_np, blind):
     """Accumulate pointclouds based on the poses"""
-    print("Accumulating pointclouds...")
     accumulated_pc_o3d = o3d.geometry.PointCloud()
-    for pose, pc_file in tqdm(zip(pose_np, pc_files), total=len(pose_np), leave=False):
-        H_lw = xyz_quat_to_matrix(pose[1:])
+    for pose, pc_file in tqdm(
+        zip(pose_np, pc_files), total=len(pose_np), desc="Accumulating Pointclouds"
+    ):
+        Hwl = xyz_quat_to_matrix(pose[1:])
         pc_np = np.fromfile(pc_file, dtype=np.float32).reshape(-1, 3)
         # Remove points within the blind region
         pc_np = pc_np[np.linalg.norm(pc_np, axis=1) > blind]
 
         # Transform the pointcloud to the world frame
-        pc_world = pc_np @ H_lw[:3, :3].T + H_lw[:3, 3].T
+        pc_world = pc_np @ Hwl[:3, :3].T + Hwl[:3, 3].T
 
         # Accumulate the pointcloud
         pc_o3d = o3d.geometry.PointCloud()
@@ -66,9 +64,17 @@ def main(args):
     )
 
     # Save the static map
-    static_map_np = np.asarray(clean_pc.points, dtype=np.float32)
-    static_map_np.tofile(args.static_map_file)
-    print(f"{len(static_map_np)} points saved to {args.static_map_file}\n")
+    if args.extension == "pcd":
+        o3d.io.write_point_cloud(args.static_map_file, clean_pc)
+    elif args.extension == "npy":
+        static_map_np = np.asarray(clean_pc.points, dtype=np.float32)
+        np.save(args.static_map_file, static_map_np)
+    elif args.extension == "bin":
+        static_map_np = np.asarray(clean_pc.points, dtype=np.float32)
+        static_map_np.tofile(args.static_map_file)
+    else:
+        raise ValueError(f"Invalid extension: {args.extension}")
+    print(f"{len(clean_pc.points)} points saved to {args.static_map_file}\n")
 
     if args.visualize:
         o3d.visualization.draw_geometries([clean_pc], window_name="Static Map")
@@ -76,29 +82,25 @@ def main(args):
 
 def get_args():
     parser = argparse.ArgumentParser(description="Generate static map for wanda")
-    parser.add_argument(
-        "--dataset_dir",
-        type=str,
-        default="/home/dongmyeong/Projects/datasets/SARA",
-        help="Path to the dataset",
-    )
-    parser.add_argument(
-        "--scene",
-        type=str,
-        default="gq_appld_south_tour_01_2024-03-14-10-08-34",
-        help="Scene name",
-    )
+    parser.add_argument("--dataset_dir", type=str, help="Path to the dataset")
+    parser.add_argument("--scene", type=str, help="Scene name")
+
     parser.add_argument("--blind", type=float, default=15.0)
     parser.add_argument("--voxel_size", type=float, default=1.0)
-    parser.add_argument("--nb_neighbors", type=int, default=500)
+    parser.add_argument("--nb_neighbors", type=int, default=100)
     parser.add_argument("--std_ratio", type=float, default=2.0)
+    parser.add_argument(
+        "--extension", type=str, default="pcd", choices=["pcd", "npy", "bin"]
+    )
     parser.add_argument("--visualize", action="store_true")
     args = parser.parse_args()
 
     args.dataset_dir = pathlib.Path(args.dataset_dir)
     args.pose_file = args.dataset_dir / "poses" / args.scene / "os1.txt"
     args.pc_dir = args.dataset_dir / "3d_comp" / args.scene
-    args.static_map_file = args.dataset_dir / "static_map" / f"{args.scene}.bin"
+    args.static_map_file = str(
+        args.dataset_dir / "static_map" / f"{args.scene}.{args.extension}"
+    )
     return args
 
 

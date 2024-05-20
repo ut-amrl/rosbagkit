@@ -17,7 +17,7 @@ DEFINE_string(dataset_dir,
 DEFINE_string(scene,
               "gq_appld_wandagq_32_field_foresttrail_06_2024-03-15-11-17-44",
               "The scene name.");
-DEFINE_int32(window_size, 10, "The window size for accumulating pointclouds.");
+DEFINE_int32(window_size, 20, "The window size for accumulating pointclouds.");
 
 void loadPointcloudData(const std::string &pointcloudDir,
                         const std::string &pcPoseFile,
@@ -135,9 +135,9 @@ void loadPointcloudData(const std::string &pointcloudDir,
     double timestamp;
     double tx, ty, tz, qw, qx, qy, qz;
     pcPoseStream >> timestamp >> tx >> ty >> tz >> qw >> qx >> qy >> qz;
-    manif::SE3d Hlw(Eigen::Vector3d(tx, ty, tz),
+    manif::SE3d Hwl(Eigen::Vector3d(tx, ty, tz),
                     Eigen::Quaterniond(qw, qx, qy, qz).normalized());
-    pcPoses.push_back(Hlw);
+    pcPoses.push_back(Hwl);
 
     pcTimestamps.push_back(timestamp);
 
@@ -177,15 +177,15 @@ void loadImageData(const std::string &imageLeftDir,
     double tx, ty, tz, qw, qx, qy, qz;
     // Read the left camera pose
     imageLeftPoseStream >> timestampLeft >> tx >> ty >> tz >> qw >> qx >> qy >> qz;
-    manif::SE3d HcwLeft(Eigen::Vector3d(tx, ty, tz),
+    manif::SE3d HwcLeft(Eigen::Vector3d(tx, ty, tz),
                         Eigen::Quaterniond(qw, qx, qy, qz).normalized());
-    imageLeftPoses.push_back(HcwLeft);
+    imageLeftPoses.push_back(HwcLeft);
 
     // Read the right camera pose
     imageRightPoseStream >> timestampRight >> tx >> ty >> tz >> qw >> qx >> qy >> qz;
-    manif::SE3d HcwRight(Eigen::Vector3d(tx, ty, tz),
+    manif::SE3d HwcRight(Eigen::Vector3d(tx, ty, tz),
                          Eigen::Quaterniond(qw, qx, qy, qz).normalized());
-    imageRightPoses.push_back(HcwRight);
+    imageRightPoses.push_back(HwcRight);
 
     // Check if the timestamps are the same
     assert(std::abs(timestampLeft - timestampRight) < 1e-1);

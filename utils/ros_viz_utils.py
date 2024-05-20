@@ -3,6 +3,7 @@ Author:      Dongmyeong Lee (domlee[at]utexas.edu)
 Date:        Sep 16, 2023
 Description: ROS visualization helper functions
 """
+
 import os
 import sys
 
@@ -14,7 +15,7 @@ from geometry_msgs.msg import Point, PoseStamped
 from visualization_msgs.msg import Marker, MarkerArray
 
 sys.path.append(os.path.join(os.path.dirname(__file__)))
-from geometry import get_corners_bbox_3d
+from geometry import get_3d_bbox_corners
 
 
 def clear_marker_array(publisher: rospy.Publisher) -> None:
@@ -25,8 +26,8 @@ def clear_marker_array(publisher: rospy.Publisher) -> None:
     publisher.publish(delete_marker_array)
 
 
-def create_bbox_3d_marker(
-    bbox_3d: np.ndarray,
+def create_3d_bbox_marker(
+    bbox: np.ndarray,
     frame_id: str,
     timestamp: rospy.Time = None,
     marker_id: int = 0,
@@ -39,7 +40,7 @@ def create_bbox_3d_marker(
     Create a 3D bounding box marker
 
     Args:
-        bbox_3d: (9,) 3D bounding box (cx, cy, cz, l, w, h, roll, pitch, yaw)
+        bbox: (9,) 3D bounding box (cx, cy, cz, l, w, h, roll, pitch, yaw)
         frame_id: frame id of header msgs
         timestamp: timestamp of header msgs
         namespace: namespace of the bounding box
@@ -50,7 +51,7 @@ def create_bbox_3d_marker(
     Returns:
         marker: a 3D bounding box marker
     """
-    assert bbox_3d.shape == (9,), "Bounding box must be (9,)"
+    assert bbox.shape == (9,), f"{bbox.shape} != (9,)"
 
     # Create the LineList marker
     marker = Marker()
@@ -77,7 +78,7 @@ def create_bbox_3d_marker(
     marker.pose.orientation.z = 0.0
 
     # Get 3D bounding box corners
-    corners, edges = get_corners_bbox_3d(bbox_3d)
+    corners, edges = get_3d_bbox_corners(bbox)
 
     for start, end in edges:
         start_pt = Point(*corners[start, :])

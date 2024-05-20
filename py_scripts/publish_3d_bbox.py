@@ -20,7 +20,7 @@ from visualization_msgs.msg import Marker, MarkerArray
 from sensor_msgs.msg import PointCloud2
 import tf2_ros
 
-from utils.ros_viz_utils import create_bbox_3d_marker, clear_marker_array
+from utils.ros_viz_utils import create_3d_bbox_marker, clear_marker_array
 from utils.ros_utils import wait_for_subscribers
 from utils.math_utils import average_rpy
 from utils.msg_converter import np_to_pointcloud2
@@ -156,7 +156,7 @@ def main():
             for class_name in instance_pubs.keys():
                 marker_array = MarkerArray()
                 for idx, bbox in enumerate(bboxes[class_name]):
-                    bbox_marker = create_bbox_3d_marker(
+                    bbox_marker = create_3d_bbox_marker(
                         bbox_3d=bbox,
                         frame_id="base_link",
                         marker_id=idx,

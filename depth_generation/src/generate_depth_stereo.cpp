@@ -1,6 +1,7 @@
 #include "generate_depth_stereo.h"
 
 #include <algorithm>
+#include <filesystem>
 #include <iostream>
 //
 #include <opencv2/opencv.hpp>
@@ -44,12 +45,13 @@ void generateDepthStereo(const std::vector<std::string>& pointcloudFiles,
   std::deque<pcl::PointCloud<pcl::PointXYZ>::Ptr> pcWorldWindow;
   int pcIdx = 0;
 
-  for (size_t imgIdx = 5000; imgIdx < imageTimestamps.size(); ++imgIdx) {
+  for (size_t imgIdx = 0; imgIdx < imageTimestamps.size(); ++imgIdx) {
     bar.set_progress(imgIdx / static_cast<float>(imageTimestamps.size()) * 100.0f);
 
     double imgTimestamp = imageTimestamps[imgIdx];
 
     // Accumulate the point clouds in the window just before the image timestamp
+    // TODO accumulate pointcloud for future timestamps
     auto it = std::upper_bound(pcTimestamps.begin(), pcTimestamps.end(), imgTimestamp);
     for (pcIdx; pcIdx < it - pcTimestamps.begin(); pcIdx++) {
       auto cloud = loadBinPointCloud<pcl::PointXYZ>(pointcloudFiles[pcIdx]);
@@ -64,6 +66,14 @@ void generateDepthStereo(const std::vector<std::string>& pointcloudFiles,
       while (pcWorldWindow.size() > windowSize) {
         pcWorldWindow.pop_front();
       }
+    }
+
+    // TODO remove
+    std::string depthLeftFile =
+        depthLeftDir + "/2d_depth_left_" + std::to_string(imgIdx) + ".png";
+
+    if (std::filesystem::exists(depthLeftFile)) {
+      continue;
     }
 
     // Load the images and camera poses
@@ -85,14 +95,19 @@ void generateDepthStereo(const std::vector<std::string>& pointcloudFiles,
                        depthLeft,
                        depthRight);
 
-    // Save the depth images
-    std::string depthLeftFile =
-        depthLeftDir + "/2d_depth_left_" + std::to_string(imgIdx) + ".png";
-    std::string depthRightFile =
-        depthRightDir + "/2d_depth_right_" + std::to_string(imgIdx) + ".png";
+    // // Save the depth images
+    // std::string depthLeftFile =
+    //     depthLeftDir + "/2d_depth_left_" + std::to_string(imgIdx) + ".png";
 
-    cv::imwrite(depthLeftFile, depthLeft);
-    break;
+    // std::string depthRightFile =
+    //     depthRightDir + "/2d_depth_right_" + std::to_string(imgIdx) + ".png";
+
+    // std::cout << "Saving depth images to " << depthLeftFile << " and " <<
+    // depthRightFile
+    // << " ... ";
+
+    saveDepthImage(depthLeft, depthLeftFile);
+    // saveDepthImage(depthRight, depthRightFile);
   }
 }
 
@@ -111,38 +126,31 @@ void computeStereoDepth(const cv::Mat& imgLeft,
   cv::Mat depthBinsRight(imgRight.size(), CV_32FC3, cv::Scalar(-1, -1, -1));
 
   for (auto rit = pcWorldWindow.rbegin(); rit != pcWorldWindow.rend(); ++rit) {
+    // Filter occluded points
     pcl::PointCloud<pcl::PointXYZ>::Ptr filteredCloud(
         new pcl::PointCloud<pcl::PointXYZ>);
 
     Eigen::Vector3f camLeftOrigin = camLeftPose.translation().cast<float>();
     Eigen::Quaternionf camLeftOrientation = camLeftPose.quat().cast<float>();
 
-    filterOccludedPoints(*rit, camLeftOrigin, camLeftOrientation, filteredCloud, true);
+    filterOccludedPoints(*rit, camLeftOrigin, camLeftOrientation, filteredCloud, 0.2f);
 
+    // Project the filtered point cloud to the rectified image
     std::vector<Eigen::Vector3f> projectedPoints;
     pcl::PointCloud<pcl::PointXYZ>::Ptr validCloud(new pcl::PointCloud<pcl::PointXYZ>);
 
-    Eigen::Matrix4f Hwc = camLeftPose.transform().inverse().cast<float>();
+    Eigen::Matrix4f Hcw = camLeftPose.transform().inverse().cast<float>();
 
     projectToRectifiedImage(imgLeft,
                             camLeftParams.at("R"),
                             camLeftParams.at("P"),
-                            Hwc,
+                            Hcw,
                             filteredCloud,
                             projectedPoints,
                             validCloud);
-
-    pcl::visualization::PCLVisualizer viewer("Valid Cloud");
-    viewer.addPointCloud<pcl::PointXYZ>(validCloud, "valid cloud");
-    Eigen::Affine3f sensorPose =
-        Eigen::Translation3f(camLeftOrigin) * camLeftOrientation;
-    viewer.addCoordinateSystem(2.0, sensorPose, "sensor frame", 0);
-    viewer.spin();
-
-    // fillDepthBins(projectedPoints, depthBinsLeft);
+    fillDepthBins(projectedPoints, depthBinsLeft, "max");
   }
-  std::cout << "Finish filling depth bins." << std::endl;
 
   // Convert Depth Bins to depth image
-  // convertDepthBinsToImage(depthBinsLeft, depthLeft);
+  densifyDepthBins(depthBinsLeft, depthLeft);
 }

@@ -4,27 +4,17 @@ Date:   May 5, 2024
 Description: Publishes raw pointcloud and IMU data for CODa asynchronously
 """
 
-import sys
 import pathlib
 import argparse
 from natsort import natsorted
 import threading
 
 import numpy as np
-
 import rospy
-import cv2
-from cv_bridge import CvBridge
-
 from sensor_msgs.msg import PointCloud2, Imu
 from rosgraph_msgs.msg import Clock
 
 from thread_modules import SharedClock, publish_clock, publish_imu, publish_pointcloud
-
-sys.path.append(str(pathlib.Path(__file__).resolve().parents[2]))
-
-PC_TOPIC = "/ouster_points"
-IMU_TOPIC = "/imu/data"
 
 
 def main(args):
@@ -35,8 +25,8 @@ def main(args):
     rospy.init_node("CODa_raw_data_publisher")
 
     # Data Publishers
-    pc_pub = rospy.Publisher(PC_TOPIC, PointCloud2, queue_size=10)
-    imu_pub = rospy.Publisher(IMU_TOPIC, Imu, queue_size=2000)
+    pc_pub = rospy.Publisher(args.pc_topic, PointCloud2, queue_size=10)
+    imu_pub = rospy.Publisher(args.imu_topic, Imu, queue_size=2000)
     clock_pub = rospy.Publisher("/clock", Clock, queue_size=10)
 
     # Timestamps
@@ -61,7 +51,8 @@ def main(args):
         target=publish_imu, args=(imu_pub, imu_data, shared_clock)
     )
     pc_thread = threading.Thread(
-        target=publish_pointcloud, args=(pc_pub, pc_files, timestamps, shared_clock)
+        target=publish_pointcloud,
+        args=(pc_pub, pc_files, timestamps, args.pc_frame, shared_clock, False),
     )
 
     clock_thread.start()
@@ -85,6 +76,9 @@ def get_args():
         help="Path to the dataset",
     )
     parser.add_argument("--scene", type=str, help="Scene name")
+    parser.add_argument("--pc_frame", type=str, help="PC frame")
+    parser.add_argument("--pc_topic", type=str, help="PC topic")
+    parser.add_argument("--imu_topic", type=str, help="IMU topic")
     args = parser.parse_args()
 
     args.dataset_dir = pathlib.Path(args.dataset_dir)

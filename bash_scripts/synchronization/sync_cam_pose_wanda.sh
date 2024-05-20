@@ -1,7 +1,7 @@
 #!/bin/bash
 PROJECT_DIR=$(realpath $(dirname "$0")/../..)
 
-dataset_dir="/home/dongmyeong/Projects/datasets/SARA"
+dataset_dir="/home/dongmyeong/Projects/datasets/SARA/wanda"
 scenes=(
   gq_appld_south_tour_01_2024-03-14-10-08-34
   gq_appld_wandagq_32_field_foresttrail_06_2024-03-15-11-17-44

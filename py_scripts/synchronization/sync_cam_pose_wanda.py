@@ -1,34 +1,11 @@
-import os
-import sys
 import pathlib
 import argparse
 from natsort import natsorted
-import warnings
-
 import numpy as np
 
 from utils.coda_utils import load_extrinsic_matrix
-from utils.lie_math import interpolate_SE3, matrix_to_xyz_quat, xyz_quat_to_matrix
-
-
-def linear_interpolation(timestamps, poses):
-    interpolated_poses = []
-    for ts in timestamps:
-        upper_idx = np.searchsorted(poses[:, 0], ts, side="right")
-
-        if upper_idx == len(poses):
-            interpolated_poses.append(poses[-1, 1:])
-        elif upper_idx == 0:
-            interpolated_poses.append(poses[0, 1:])
-        else:
-            upper_pose = poses[upper_idx]
-            lower_pose = poses[upper_idx - 1]
-
-            # Interpolate the poses
-            interpolated_pose = interpolate_SE3(lower_pose, upper_pose, ts)
-            interpolated_poses.append(interpolated_pose)
-
-    return interpolated_poses
+from utils.lie_math import matrix_to_xyz_quat
+from utils.pose_interpolator import PoseInterpolator
 
 
 def load_data(args):
@@ -36,6 +13,7 @@ def load_data(args):
 
     # Load the LiDAR poses
     poses = np.loadtxt(args.pose_file)  # timestamp, x, y, z, qw, qx, qy, qz
+    print(f"Loaded {len(poses)} LiDAR poses")
 
     # Load the images and its timestamps
     img_left_files = natsorted(list(args.img_left_dir.glob("*.jpg")))
@@ -49,15 +27,15 @@ def load_data(args):
     print(f"Loaded {len(img_right_timestamps)} timestamps for right images")
 
     # Load the camera intrinsics
-    H_lc_left = load_extrinsic_matrix(args.cam_left_extrinsic)
-    H_lc_right = load_extrinsic_matrix(args.cam_right_extrinsic)
+    Hcl_left = load_extrinsic_matrix(args.cam_left_extrinsic)
+    Hcl_right = load_extrinsic_matrix(args.cam_right_extrinsic)
 
     data = {
         "poses": poses,
         "img_left_timestamps": img_left_timestamps,
         "img_right_timestamps": img_right_timestamps,
-        "H_lc_left": H_lc_left,
-        "H_lc_right": H_lc_right,
+        "Hcl_left": Hcl_left,
+        "Hcl_right": Hcl_right,
     }
     return data
 
@@ -67,17 +45,21 @@ def main(args):
     data = load_data(args)
 
     # Interpolate the LiDAR poses to the image timestamps
-    poses = data["poses"]
     left_timestamps = data["img_left_timestamps"]
     right_timestamps = data["img_right_timestamps"]
-    os_left_ts_poses = linear_interpolation(left_timestamps, poses)
-    os_right_ts_poses = linear_interpolation(right_timestamps, poses)
+
+    pose_interpolator = PoseInterpolator(data["poses"])
+    os_left_ts_transforms = [
+        pose_interpolator.get_interpolated_transform(ts) for ts in left_timestamps
+    ]
+    os_right_ts_transforms = [
+        pose_interpolator.get_interpolated_transform(ts) for ts in right_timestamps
+    ]
 
     # Transform the LiDAR poses to the camera poses using the extrinsics (Left)
-    H_cl_left = np.linalg.inv(data["H_lc_left"])
+    Hlc_left = np.linalg.inv(data["Hcl_left"])
     cam_left_poses = [
-        matrix_to_xyz_quat(xyz_quat_to_matrix(H_lw) @ H_cl_left)
-        for H_lw in os_left_ts_poses
+        matrix_to_xyz_quat(Hwl @ Hlc_left) for Hwl in os_left_ts_transforms
     ]
     cam_left_poses = np.hstack((left_timestamps[:, None], cam_left_poses))
     np.savetxt(
@@ -88,10 +70,9 @@ def main(args):
     print(f"Saved the camera poses to {args.out_cam_left_posefile}")
 
     # Transform the LiDAR poses to the camera poses using the extrinsics (Right)
-    H_cl_right = np.linalg.inv(data["H_lc_right"])
+    Hlc_right = np.linalg.inv(data["Hcl_right"])
     cam_right_poses = [
-        matrix_to_xyz_quat(xyz_quat_to_matrix(H_lw) @ H_cl_right)
-        for H_lw in os_right_ts_poses
+        matrix_to_xyz_quat(Hwl @ Hlc_right) for Hwl in os_right_ts_transforms
     ]
     cam_right_poses = np.hstack((right_timestamps[:, None], cam_right_poses))
     np.savetxt(

@@ -1,6 +1,7 @@
 #!/bin/bash
 PROJECT_DIR=$(realpath $(dirname "$0")/../..)
 
+dataset_dir="/home/dongmyeong/Projects/datasets/SARA/wanda"
 scenes=(
   # gq_appld_south_tour_01_2024-03-14-10-08-34
   gq_appld_wandagq_32_field_foresttrail_06_2024-03-15-11-17-44
@@ -9,7 +10,9 @@ scenes=(
   # gq_TN_Menu_A_datacollect_02_2024-02-21-17-23-09
   # gq_appld_forest_mission_autonomous_deployment_01_2024-03-12-14-15-49
 )
-dataset_dir="/home/dongmyeong/Projects/datasets/SARA"
+
+pc_topic="/wanda/lidar_points"
+imu_topic="/wanda/imu/data"
 
 # Define the paths to your catkin workspace setup files
 setup_ws1="/home/dongmyeong/Projects/others/Point-LIO/devel/setup.bash"
@@ -19,8 +22,8 @@ rviz=true
 # Function to handle script termination
 cleanup() {
   echo "Terminating background processes..."
-  kill $PID1 $PID2 $PID3
-  wait $PID1 $PID2 $PID3
+  kill $PID1 $PID2 $PID
+  wait $PID1 $PID2 $PID
   exit 1  # Exit script with a status indicating failure
 }
 
@@ -35,9 +38,10 @@ if pgrep -x "roscore" > /dev/null; then
 fi
 
 # Start roscore
-roscore & PID3=$!
+roscore & PID=$!
 sleep 3
 
+# LiDAR-Inertial Odometry
 for scene in "${scenes[@]}"; do
   # Start Point-LIO
   ( source $setup_ws1 && exec roslaunch point_lio mapping_wanda.launch rviz:=$rviz --wait ) &
@@ -46,17 +50,14 @@ for scene in "${scenes[@]}"; do
   # Start odometry_saver
   ( source $setup_ws2 && exec roslaunch odometry_saver point_lio.launch \
       dataset:=wanda save_pose_only:=true \
-      pose_file:=$dataset_dir/poses/$scene/point_lio.txt \
-      dst_directory:=$dataset_dir/point_lio_results/$scene \
-      --wait) &
+      pose_file:=$dataset_dir/poses/$scene/point_lio.txt --wait) &
   PID2=$!
 
   # Wait for both background processes to start
   sleep 3
 
   # Start rosbag play
-  rosbag play $dataset_dir/bagfiles/$scene.bag \
-    --clock --topic /wanda/lidar_points /wanda/imu/data &
+  rosbag play $dataset_dir/bagfiles/$scene.bag --clock --topic $pc_topic $imu_topic &
   wait $!
 
   echo "Rosbag play finished. Terminating background processes..."
@@ -64,3 +65,6 @@ for scene in "${scenes[@]}"; do
   wait $PID1 $PID2 2>/dev/null
 done
 echo "All done!"
+
+kill $PID
+wait $PID 2>/dev/null

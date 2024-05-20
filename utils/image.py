@@ -31,7 +31,7 @@ def get_disparity_map(img_left, img_right):
     left_matcher = cv2.StereoSGBM_create(
         minDisparity=0,
         numDisparities=11 * 16,  # max_disp has to be dividable by 16
-        blockSize= block_size,
+        blockSize=block_size,
         P1=4 * block_size**2,
         P2=64 * block_size**2,
         disp12MaxDiff=1,
@@ -55,7 +55,7 @@ def get_disparity_map(img_left, img_right):
     disp_left = left_matcher.compute(img_left_gray, img_right_gray)
     disp_right = right_matcher.compute(img_right_gray, img_left_gray)
 
-    visualize_rgbd_image(img_left, disp_left)
+    # visualize_rgbd_image(img_left, disp_left)
 
     # apply wls filter
     filtered_left = wls_filter.filter(disp_left, img_left, None, disp_right)
@@ -67,7 +67,7 @@ def get_disparity_map(img_left, img_right):
 def draw_epipolar_lines(img1, img2, outfile=None):
     if img1 is None or img2 is None:
         raise ValueError("Failed to load the images")
-    
+
     if len(img1.shape) == 3:
         img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
     if len(img2.shape) == 3:

@@ -1,16 +1,21 @@
 #!/bin/bash
 PROJECT_DIR=$(realpath $(dirname "$0")/../..)
 
-dataset_dir="/home/dongmyeong/Projects/datasets/CODa"
-sequences=(11 12 13 16 17 18 19 20 21 22)
+dataset_dir="/home/dongmyeong/Projects/datasets/SARA/wanda"
+scenes=(
+  gq_appld_south_tour_01_2024-03-14-10-08-34
+  gq_appld_wandagq_32_field_foresttrail_06_2024-03-15-11-17-44
+  gq_appld_wandagq_32_forest_02_2024-03-15-12-02-37
+  gq_appld_wandagq_32_forest_03_2024-03-15-12-16-36
+  gq_TN_Menu_A_datacollect_02_2024-02-21-17-23-09
+  gq_appld_forest_mission_autonomous_deployment_01_2024-03-12-14-15-49
+)
 
 origin_frame="map"
 pc_frame="os1"
 pc_topic="/ouster_points"
 odom_topic="/odom"
-blind=3.0
-
-setup_ws1="/home/dongmyeong/Projects/interactive_slam/devel/setup.bash"
+blind=0.0
 
 cleanup() {
   echo "Terminating background processes..."
@@ -32,27 +37,13 @@ fi
 roscore & PID=$!
 sleep 3
 
-for seq in "${sequences[@]}"; do
-  # Start odometry_saver
-  ( source $setup_ws1 && exec roslaunch odometry_saver online.launch \
-    dataset:=coda save_pose_only:=false \
-    dst_directory:=$dataset_dir/point-lio_results/$seq  \
-    points_topic:=$pc_topic odom_topic:=$odom_topic \
-    endpoint_frame:=$pc_frame origin_frame:=$origin_frame) &
-  PID1=$!
-
-  sleep 3
-
+for scene in "${scenes[@]}"; do
   # Publish compensated pointcloud and odometry
   python $PROJECT_DIR/py_scripts/publish_data/publish_compensated_data.py \
-    --dataset CODa --dataset_dir=$dataset_dir --scene=$seq --blind=$blind \
+    --dataset Wanda --dataset_dir=$dataset_dir --scene=$scene --blind=$blind \
     --origin_frame=$origin_frame --pc_frame=$pc_frame \
     --pc_topic=$pc_topic --odom_topic=$odom_topic &
   wait $!
-
-  echo "Terminating background processes..."
-  kill $PID1
-  wait $PID1 2>/dev/null
 done
 echo "Finish publishing compensated pointcloud and odometry."
 
