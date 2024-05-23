@@ -3,7 +3,7 @@
 ## Generate LiDAR Odometry and Compensated Pointcloud
 
 1. Get extrinsic between LiDAR and IMU
-   - extract from TF: `py_scripts/bagfile_extraction/extract_tf.py`
+   - extract from TF: `src/bagfile_extraction/extract_tf.py`
    - Manual Calibrations
      - [LiDAR_IMU_Init](https://github.com/hku-mars/LiDAR_IMU_Init)
 

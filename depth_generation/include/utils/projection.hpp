@@ -17,12 +17,12 @@
 void projectToRectifiedImage(const cv::Mat& img,
                              const cv::Mat& R,
                              const cv::Mat& P,
-                             const Eigen::Matrix4f& T,
+                             const Eigen::Matrix4f& extrinsic,
                              const pcl::PointCloud<pcl::PointXYZ>::Ptr cloud,
                              std::vector<Eigen::Vector3f>& projectedPoints,
                              pcl::PointCloud<pcl::PointXYZ>::Ptr& validCloud,
                              bool visualize = false) {
-  projectedPoints.clear();
+  projectedPoints.clear();  // (x, y, depth)
   validCloud->clear();
   if (cloud->empty()) {
     return;
@@ -30,7 +30,7 @@ void projectToRectifiedImage(const cv::Mat& img,
 
   // Transform points to camera coordinate system
   pcl::PointCloud<pcl::PointXYZ>::Ptr pcCam(new pcl::PointCloud<pcl::PointXYZ>);
-  pcl::transformPointCloud(*cloud, *pcCam, T);
+  pcl::transformPointCloud(*cloud, *pcCam, extrinsic);
 
   // TODO: clean this up
   Eigen::Matrix<float, 3, 4> Pmat;

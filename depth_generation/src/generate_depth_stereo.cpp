@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <iostream>
 //
+#include <glog/logging.h>
 #include <opencv2/opencv.hpp>
 #include <pcl/common/transforms.h>
 #include <pcl/visualization/pcl_visualizer.h>
@@ -27,33 +28,37 @@ void generateDepthStereo(const std::vector<std::string>& pointcloudFiles,
                          const std::string& depthLeftDir,
                          const std::string& depthRightDir) {
   assert(pointcloudFiles.size() == pcPoses.size());
+  assert(pointcloudFiles.size() == pcTimestamps.size());
   assert(imageLeftFiles.size() == imageLeftPoses.size());
   assert(imageRightFiles.size() == imageRightPoses.size());
   assert(imageLeftPoses.size() == imageRightPoses.size());
 
-  using namespace indicators;
-  ProgressBar bar{option::BarWidth{50},
-                  option::Start{"["},
-                  option::Fill{"="},
-                  option::Lead{">"},
-                  option::Remainder{" "},
-                  option::End{"]"},
-                  option::PostfixText{"Generating depth images..."},
-                  option::ForegroundColor{Color::green},
-                  option::FontStyles{std::vector<FontStyle>{FontStyle::bold}}};
+  // using namespace indicators;
+  // ProgressBar bar{option::BarWidth{50},
+  //                 option::Start{"["},
+  //                 option::Fill{"="},
+  //                 option::Lead{">"},
+  //                 option::Remainder{" "},
+  //                 option::End{"]"},
+  //                 option::PostfixText{"Generating depth images..."},
+  //                 option::ForegroundColor{Color::green},
+  //                 option::FontStyles{std::vector<FontStyle>{FontStyle::bold}}};
 
   std::deque<pcl::PointCloud<pcl::PointXYZ>::Ptr> pcWorldWindow;
   int pcIdx = 0;
 
-  for (size_t imgIdx = 0; imgIdx < imageTimestamps.size(); ++imgIdx) {
-    bar.set_progress(imgIdx / static_cast<float>(imageTimestamps.size()) * 100.0f);
+  for (size_t imgIdx = 5000; imgIdx < imageTimestamps.size(); ++imgIdx) {
+    // bar.set_progress(imgIdx / static_cast<float>(imageTimestamps.size()) * 100.0f);
 
     double imgTimestamp = imageTimestamps[imgIdx];
 
-    // Accumulate the point clouds in the window just before the image timestamp
-    // TODO accumulate pointcloud for future timestamps
+    // Accumulate the point clouds in the window centered around the image timestamp
     auto it = std::upper_bound(pcTimestamps.begin(), pcTimestamps.end(), imgTimestamp);
-    for (pcIdx; pcIdx < it - pcTimestamps.begin(); pcIdx++) {
+    int endIdx = std::min(static_cast<int>(it - pcTimestamps.begin()) + windowSize / 2,
+                          static_cast<int>(pcTimestamps.size()));
+    for (; pcIdx < endIdx; pcIdx++) {
+      std::cout << "Loading point cloud " << pointcloudFiles[pcIdx] << " ... "
+                << std::endl;
       auto cloud = loadBinPointCloud<pcl::PointXYZ>(pointcloudFiles[pcIdx]);
       pcl::PointCloud<pcl::PointXYZ>::Ptr pcWorld(new pcl::PointCloud<pcl::PointXYZ>);
 
@@ -66,14 +71,6 @@ void generateDepthStereo(const std::vector<std::string>& pointcloudFiles,
       while (pcWorldWindow.size() > windowSize) {
         pcWorldWindow.pop_front();
       }
-    }
-
-    // TODO remove
-    std::string depthLeftFile =
-        depthLeftDir + "/2d_depth_left_" + std::to_string(imgIdx) + ".png";
-
-    if (std::filesystem::exists(depthLeftFile)) {
-      continue;
     }
 
     // Load the images and camera poses
@@ -99,27 +96,28 @@ void generateDepthStereo(const std::vector<std::string>& pointcloudFiles,
     // std::string depthLeftFile =
     //     depthLeftDir + "/2d_depth_left_" + std::to_string(imgIdx) + ".png";
 
-    // std::string depthRightFile =
-    //     depthRightDir + "/2d_depth_right_" + std::to_string(imgIdx) + ".png";
+    std::string depthRightFile =
+        depthRightDir + "/2d_depth_right_" + std::to_string(imgIdx) + ".png";
 
     // std::cout << "Saving depth images to " << depthLeftFile << " and " <<
     // depthRightFile
-    // << " ... ";
+    //           << " ... " << std::endl;
 
-    saveDepthImage(depthLeft, depthLeftFile);
-    // saveDepthImage(depthRight, depthRightFile);
+    // // saveDepthImage(depthLeft, depthLeftFile);
+    saveDepthImage(depthRight, depthRightFile);
   }
 }
 
-void computeStereoDepth(const cv::Mat& imgLeft,
-                        const cv::Mat& imgRight,
-                        const manif::SE3d& camLeftPose,
-                        const manif::SE3d& camRightPose,
-                        const std::unordered_map<std::string, cv::Mat>& camLeftParams,
-                        const std::unordered_map<std::string, cv::Mat>& camRightParams,
-                        std::deque<pcl::PointCloud<pcl::PointXYZ>::Ptr>& pcWorldWindow,
-                        cv::Mat& depthLeft,
-                        cv::Mat& depthRight) {
+void computeStereoDepth(
+    const cv::Mat& imgLeft,
+    const cv::Mat& imgRight,
+    const manif::SE3d& camLeftPose,
+    const manif::SE3d& camRightPose,
+    const std::unordered_map<std::string, cv::Mat>& camLeftParams,
+    const std::unordered_map<std::string, cv::Mat>& camRightParams,
+    const std::deque<pcl::PointCloud<pcl::PointXYZ>::Ptr>& pcWorldWindow,
+    cv::Mat& depthLeft,
+    cv::Mat& depthRight) {
   assert(imgLeft.size() == imgRight.size());
 
   cv::Mat depthBinsLeft(imgLeft.size(), CV_32FC3, cv::Scalar(-1, -1, -1));
@@ -148,9 +146,11 @@ void computeStereoDepth(const cv::Mat& imgLeft,
                             filteredCloud,
                             projectedPoints,
                             validCloud);
-    fillDepthBins(projectedPoints, depthBinsLeft, "max");
+    // fillDepthBins(projectedPoints, depthBinsLeft, "max");
+    fillDepthBins(projectedPoints, depthBinsRight, "max");
   }
 
   // Convert Depth Bins to depth image
-  densifyDepthBins(depthBinsLeft, depthLeft);
+  // densifyDepthBins(depthBinsLeft, depthLeft);
+  densifyDepthBins(depthBinsRight, depthRight);
 }

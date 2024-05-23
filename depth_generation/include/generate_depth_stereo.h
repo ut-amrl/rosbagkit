@@ -33,7 +33,7 @@ void computeStereoDepth(
     const manif::SE3d& camRightPose,
     const std::unordered_map<std::string, cv::Mat>& camLeftParams,
     const std::unordered_map<std::string, cv::Mat>& camRightParams,
-    std::deque<pcl::PointCloud<pcl::PointXYZ>::Ptr>& pcWorldAccumulator,
+    const std::deque<pcl::PointCloud<pcl::PointXYZ>::Ptr>& pcWorldWindow,
     cv::Mat& depthLeft,
     cv::Mat& depthRight);
 
