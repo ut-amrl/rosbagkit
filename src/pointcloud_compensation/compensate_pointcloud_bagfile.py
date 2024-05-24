@@ -19,7 +19,7 @@ from sensor_msgs.msg import PointCloud2
 np.float = np.float32
 import ros_numpy
 
-from utils.pose_interpolator import PoseInterpolator
+from src.utils.pose_interpolator import PoseInterpolator
 
 
 def motion_compensation(pc_msg, pose_interpolator):

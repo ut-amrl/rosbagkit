@@ -18,11 +18,11 @@ from scipy.spatial.transform import Rotation as R
 import cv2
 import matplotlib.pyplot as plt
 
-from utils.coda_utils import load_extrinsic_matrix, load_camera_params
-from utils.depth import fill_depth_bins, densify_depth_image, save_depth_image
-from utils.projection import project_to_image
-from utils.transforms import xyz_quat_to_matrix
-from utils.visualization import (
+from src.utils.camera import load_extrinsic_matrix, load_camera_params
+from src.utils.depth import fill_depth_bins, densify_depth_image, save_depth_image
+from src.utils.projection import project_to_image
+from src.utils.transforms import xyz_quat_to_matrix
+from src.utils.visualization import (
     visualize_pointcloud,
     visualize_rgbd_image,
     visualize_normalized_image,

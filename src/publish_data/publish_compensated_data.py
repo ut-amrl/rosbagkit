@@ -12,7 +12,7 @@ import threading
 import numpy as np
 import rospy
 
-from sensor_msgs.msg import PointCloud2, Image
+from sensor_msgs.msg import PointCloud2
 from rosgraph_msgs.msg import Clock
 from nav_msgs.msg import Odometry, Path
 
@@ -22,7 +22,6 @@ from thread_modules import (
     publish_pointcloud,
     publish_odom,
     publish_tf,
-    publish_image,
 )
 
 from src.utils.ros_utils import wait_for_subscribers
@@ -37,23 +36,14 @@ def main(args):
     # Data Publishers
     clock_pub = rospy.Publisher("/clock", Clock, queue_size=10)
     pc_pub = rospy.Publisher(args.pc_topic, PointCloud2, queue_size=100)
-    odom_pub = rospy.Publisher(args.odom_topic, Odometry, queue_size=1)
-    path_pub = rospy.Publisher(args.path_topic, Path, queue_size=1)
-
-    image_pub = None
-    if args.pub_image:
-        image_pub = rospy.Publisher("/image", Image, queue_size=10)
+    odom_pub = rospy.Publisher(args.odom_topic, Odometry, queue_size=10)
+    path_pub = rospy.Publisher(args.path_topic, Path, queue_size=10)
 
     # Load Pose & Timestamp
     pose_np = np.loadtxt(args.pose_file)[:, :8]
     pc_files = natsorted(args.pc_dir.glob("*.bin"))
     pc_timestamps = pose_np[:, 0]
     assert len(pose_np) == len(pc_files), f"{len(pose_np)} != {len(pc_files)}"
-
-    if args.pub_image:
-        image_files = natsorted(args.img_dir.glob("*.jpg"))
-        img_timestamps = np.loadtxt(args.img_timestmamps)
-        assert len(image_files) == len(img_timestamps)
 
     # Start-up delay
     wait_for_subscribers([pc_pub, odom_pub])
@@ -102,29 +92,15 @@ def main(args):
         ),
     )
 
-    img_thread = None
-    if args.pub_image:
-        img_thread = threading.Thread(
-            target=publish_image,
-            args=(
-                image_pub,
-                image_files,
-                img_timestamps,
-                shared_clock,
-            ),
-        )
-
     clock_thread.start()
     pc_thread.start()
     odom_thread.start()
     tf_thread.start()
-    not args.pub_image or img_thread.start()
 
     clock_thread.join()
     pc_thread.join()
     odom_thread.join()
     tf_thread.join()
-    not args.pub_image or img_thread.join()
 
 
 def get_args():
@@ -149,7 +125,6 @@ def get_args():
     parser.add_argument(
         "-r", "--rate", type=int, default=1, help="Multiply the publish rate by FACTOR"
     )
-    parser.add_argument("--pub_image", action="store_true", help="Publish image")
     args = parser.parse_args()
 
     args.dataset_dir = pathlib.Path(args.dataset_dir)
@@ -161,17 +136,8 @@ def get_args():
     elif args.dataset == "Wanda":
         args.pc_dir = args.dataset_dir / "3d_comp" / args.scene
         args.pose_file = args.dataset_dir / "poses" / args.scene / "os1.txt"
-        args.img_dir = args.dataset_dir / "2d_rect" / args.scene / "left"
-        args.img_timestmamps = (
-            args.dataset_dir / "timestamps" / args.scene / "img_left.txt"
-        )
     else:
         raise NotImplementedError(f"{args.dataset} is not implemented")
-
-    # print all arguments
-    print("Arguments:")
-    for arg in vars(args):
-        print(f"\t{arg}: {getattr(args, arg)}")
 
     return args
 

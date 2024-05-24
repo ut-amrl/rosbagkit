@@ -8,9 +8,10 @@ from typing import Optional, Literal
 import rospy
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+import yaml
 
 from std_msgs.msg import Header
-from sensor_msgs.msg import PointCloud2, PointField, Imu
+from sensor_msgs.msg import PointCloud2, PointField, Imu, CameraInfo
 from geometry_msgs.msg import Point, PoseStamped
 from nav_msgs.msg import Odometry
 from tf2_ros import TransformStamped
@@ -417,3 +418,18 @@ def tf_msg_from_matrix(
     tf_msg.transform.rotation.z = quaternion[2]
 
     return tf_msg
+
+
+def load_camera_info(camera_info_file):
+    with open(camera_info_file, "r") as f:
+        camera_info_data = yaml.safe_load(f)
+
+    camera_info_msg = CameraInfo()
+    camera_info_msg.width = camera_info_data["image_width"]
+    camera_info_msg.height = camera_info_data["image_height"]
+    camera_info_msg.K = camera_info_data["camera_matrix"]["data"]
+    camera_info_msg.D = camera_info_data["distortion_coefficients"]["data"]
+    camera_info_msg.R = camera_info_data["rectification_matrix"]["data"]
+    camera_info_msg.P = camera_info_data["projection_matrix"]["data"]
+    camera_info_msg.distortion_model = camera_info_data["distortion_model"]
+    return camera_info_msg

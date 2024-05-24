@@ -8,7 +8,7 @@ from scipy.spatial.transform import Rotation as R
 import rospy
 import tf2_ros
 
-from utils.ros_utils import play_bagfile
+from src.utils.ros_utils import play_bagfile
 
 
 def save_extrinsic_matrix(matrix, outfile):

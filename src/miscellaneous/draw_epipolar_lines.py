@@ -1,7 +1,7 @@
 import argparse
 import cv2
 
-from utils.image import draw_epipolar_lines
+from src.utils.image import draw_epipolar_lines
 
 
 def main(args):

@@ -20,10 +20,10 @@ from visualization_msgs.msg import Marker, MarkerArray
 from sensor_msgs.msg import PointCloud2
 import tf2_ros
 
-from utils.ros_viz_utils import create_3d_bbox_marker, clear_marker_array
-from utils.ros_utils import wait_for_subscribers
-from utils.math_utils import average_rpy
-from utils.msg_converter import np_to_pointcloud2
+from src.utils.ros_viz_utils import create_3d_bbox_marker, clear_marker_array
+from src.utils.ros_utils import wait_for_subscribers
+from src.utils.math_utils import average_rpy
+from src.utils.msg_converter import np_to_pointcloud2
 
 # fmt: off
 CLASSES = {

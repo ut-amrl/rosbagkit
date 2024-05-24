@@ -13,7 +13,7 @@ import pathlib
 import numpy as np
 import open3d as o3d
 
-from utils.lie_math import xyz_quat_to_matrix
+from src.utils.lie_math import xyz_quat_to_matrix
 
 
 def accumulate_pointcloud(pc_files, pose_np, blind):

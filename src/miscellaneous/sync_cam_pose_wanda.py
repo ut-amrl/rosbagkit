@@ -3,9 +3,9 @@ import argparse
 from natsort import natsorted
 import numpy as np
 
-from utils.coda_utils import load_extrinsic_matrix
-from utils.lie_math import matrix_to_xyz_quat
-from utils.pose_interpolator import PoseInterpolator
+from src.utils.camera import load_extrinsic_matrix
+from src.utils.lie_math import matrix_to_xyz_quat
+from src.utils.pose_interpolator import PoseInterpolator
 
 
 def load_data(args):

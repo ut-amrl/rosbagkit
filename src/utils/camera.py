@@ -46,9 +46,9 @@ def load_camera_params(intrinsic_file: str) -> Dict[str, np.ndarray]:
         params = yaml.safe_load(f)
 
         if "image_width" in params.keys() and "image_height" in params.keys():
-            image_size = np.array([params["image_width"], params["image_height"]])
+            image_size = np.array([params["image_height"], params["image_width"]])
         elif "width" in params.keys() and "height" in params.keys():
-            image_size = np.array([params["width"], params["height"]])
+            image_size = np.array([params["height"], params["width"]])
 
         intrinsic_matrix = np.array(params["camera_matrix"]["data"]).reshape(
             params["camera_matrix"]["rows"],

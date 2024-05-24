@@ -33,8 +33,8 @@ class SharedClock:
             return self.current_time
 
 
-def publish_clock(clock_pub, shared_clock, timestamps, freq=1000, rate=1):
-    interval = rospy.Duration.from_sec(1.0 / freq)
+def publish_clock(clock_pub, shared_clock, timestamps, rate=1):
+    interval = rospy.Duration.from_sec(1.0 / 1000)  # 1kHz
     first_time = rospy.Time.from_sec(timestamps[0])
     curr_time = first_time
     last_time = rospy.Time.from_sec(timestamps[-1] + 1.0)
@@ -47,30 +47,8 @@ def publish_clock(clock_pub, shared_clock, timestamps, freq=1000, rate=1):
         elapsed_time = (curr_time - first_time).to_sec()
         progress = elapsed_time / total_duration * 100
         print(f"Progress: {progress:.2f}%", end="\r")
-
-        time.sleep((interval.to_sec() / rate) / freq)
-        curr_time += interval
-
-
-def publish_image(image_pub, image_files, timestamps, shared_clock):
-    assert len(image_files) == len(timestamps)
-    bridge = CvBridge()
-
-    img_last_idx = 0
-    while img_last_idx < len(image_files) and not rospy.is_shutdown():
-        current_time = shared_clock.get_time()
-        if current_time:
-            while (
-                img_last_idx < len(image_files)
-                and timestamps[img_last_idx] < current_time.to_sec()
-            ):
-                ts = rospy.Time.from_sec(timestamps[img_last_idx])
-                img = cv2.imread(str(image_files[img_last_idx]))
-                img_msg = bridge.cv2_to_imgmsg(img, encoding="bgr8")
-                img_msg.header.stamp = ts
-                image_pub.publish(img_msg)
-                img_last_idx += 1
-        time.sleep(0.0001)
+        time.sleep(interval.to_sec())
+        curr_time += interval * rate
 
 
 def publish_imu(imu_pub, imu_data, shared_clock):
@@ -86,7 +64,7 @@ def publish_imu(imu_pub, imu_data, shared_clock):
                 imu_msg = np_to_imu(imu_data[imu_last_idx][1:], "imu_link", ts)
                 imu_pub.publish(imu_msg)
                 imu_last_idx += 1
-        time.sleep(0.0001)
+        time.sleep(0.001)
 
 
 def publish_pointcloud(
@@ -126,7 +104,7 @@ def publish_pointcloud(
                     pc_msg = process_pointcloud(pc_file, dt * 1e9, frame_id, ts)
                 pc_pub.publish(pc_msg)
                 pc_last_idx += 1
-        time.sleep(0.0001)
+        time.sleep(0.001)
 
 
 def process_pointcloud(bin_path, dt, frame_id, timestamp):
@@ -191,7 +169,7 @@ def publish_odom(odom_pub, path_pub, pose_np, frame_id, child_frame_id, shared_c
                 global_path.poses.append(pose_msg)
                 path_pub.publish(global_path)
                 pose_last_idx += 1
-        time.sleep(0.0001)
+        time.sleep(0.001)
 
 
 def publish_tf(pose_np, frame_id, child_frame_id, shared_clock):
@@ -214,7 +192,7 @@ def publish_tf(pose_np, frame_id, child_frame_id, shared_clock):
                 )
                 tf_broadcaster.sendTransform(tf_msg)
                 pose_last_idx += 1
-        time.sleep(0.0001)
+        time.sleep(0.001)
 
 
 def publish_static_map(map_file, frame_id):
@@ -224,3 +202,24 @@ def publish_static_map(map_file, frame_id):
     static_map = np.fromfile(map_file, dtype=np.float32).reshape(-1, 3)
     static_map_msg = np_to_pointcloud2(static_map, "x y z", frame_id)
     static_map_pub.publish(static_map_msg)
+
+
+def publish_image(image_pub, image_files, timestamps, shared_clock):
+    assert len(image_files) == len(timestamps)
+    bridge = CvBridge()
+
+    img_last_idx = 0
+    while img_last_idx < len(image_files) and not rospy.is_shutdown():
+        current_time = shared_clock.get_time()
+        if current_time:
+            while (
+                img_last_idx < len(image_files)
+                and timestamps[img_last_idx] < current_time.to_sec()
+            ):
+                ts = rospy.Time.from_sec(timestamps[img_last_idx])
+                img = cv2.imread(str(image_files[img_last_idx]))
+                img_msg = bridge.cv2_to_imgmsg(img, encoding="bgr8")
+                img_msg.header.stamp = ts
+                image_pub.publish(img_msg)
+                img_last_idx += 1
+        time.sleep(0.001)

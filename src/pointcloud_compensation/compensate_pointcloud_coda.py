@@ -12,7 +12,7 @@ from natsort import natsorted
 
 import numpy as np
 
-from utils.pose_interpolator import PoseInterpolator
+from src.utils.pose_interpolator import PoseInterpolator
 
 
 def motion_compensation(pc_file, scan_ts, dt, pose_interpolator):

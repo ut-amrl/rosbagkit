@@ -23,7 +23,7 @@ from thread_modules import (
     publish_static_map,
 )
 
-from utils.ros_utils import wait_for_subscribers
+from src.utils.ros_utils import wait_for_subscribers
 
 GLOBAL_FRAME = "map"
 LIDAR_FRAME = "os1"

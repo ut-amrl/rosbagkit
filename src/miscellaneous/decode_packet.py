@@ -13,7 +13,7 @@ import numpy as np
 import rosbag
 from ouster import client
 
-from utils.msg_converter import np_to_pointcloud2
+from src.utils.msg_converter import np_to_pointcloud2
 
 
 class BagDecoder(object):
