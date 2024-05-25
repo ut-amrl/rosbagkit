@@ -2,7 +2,8 @@
 PROJECT_DIR=$(realpath $(dirname "$0")/../..)
 
 dataset_dir="/home/dongmyeong/Projects/datasets/CODa"
-sequences=(0 1 2 3 4 5 6 7 9 10 11 12 13 16 17 18 19 20 21 22)
+# sequences=(0 1 2 3 4 5 6 7 9 10 11 12 13 16 17 18 19 20 21 22)
+sequences=(20)
 
 pc_frame="os1"
 pc_topic="/ouster_points"
@@ -10,7 +11,7 @@ imu_topic="/imu/data"
 
 # Define the paths to your catkin workspace setup files
 setup_ws1="/home/dongmyeong/Projects/others/Point-LIO/devel/setup.bash"
-setup_ws2="/home/dongmyeong/Projects/interactive_slam/devel/setup.bash"
+setup_ws2="/home/dongmyeong/Projects/others/interactive_slam/devel/setup.bash"
 rviz=true
 
 # Function to handle script termination

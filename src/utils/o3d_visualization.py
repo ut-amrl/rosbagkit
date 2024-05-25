@@ -1,4 +1,5 @@
 import threading
+import time
 import open3d as o3d
 
 from collections.abc import Iterable
@@ -8,24 +9,33 @@ from scipy.spatial.transform import Rotation as R
 
 class O3dVisualizer:
     def __init__(self, window_name="Open3D Visualizer", background_color=(0, 0, 0)):
+        self.window_name = window_name
+        self.background_color = np.asarray(background_color)
         self.vis = o3d.visualization.Visualizer()
-        self.vis.create_window(window_name=window_name)
-        self.vis.get_render_option().background_color = np.array(background_color)
+        self.running = False
+        self.thread = threading.Thread(target=self.run)
 
     def add_geometry(self, geometry):
         self.vis.add_geometry(geometry)
 
-    def update(self):
-        self.vis.poll_events()
-        self.vis.update_renderer()
-
     def clear(self):
         self.vis.clear_geometries()
 
+    def start(self):
+        self.running = True
+        self.thread.start()
+
     def run(self):
-        self.vis.run()
+        self.vis.create_window(window_name=self.window_name)
+        self.vis.get_render_option().background_color = self.background_color
+
+        while self.vis.poll_events():
+            self.vis.update_renderer()
+            time.sleep(0.1)
 
     def close(self):
+        self.running = False
+        self.thread.join()
         self.vis.destroy_window()
 
 
@@ -92,20 +102,17 @@ def create_o3d_ellipsoid(ellipsoid, color, degree=False):
 
 
 if __name__ == "__main__":
-    vis = o3d.visualization.Visualizer()
-    vis.create_window()
-    vis.get_render_option().background_color = np.array([0, 0, 0])
+    vis = O3dVisualizer()
+    vis.start()
 
     coord_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(
         size=10, origin=[0, 0, 0]
     )
     vis.add_geometry(coord_frame)
 
-    ellipsoid = np.array([0, 0, 0, 1.0, 2.0, 3.0, 0, 0, 0.5], dtype=np.float64)
-    ell = create_o3d_ellipsoid(ellipsoid, (255, 0, 0))
-    vis.add_geometry(ell)
-
-    vis.poll_events()
-    vis.update_renderer()
-    vis.run()
-    vis.destroy_window()
+    for _ in range(10):
+        ellipsoid = np.random.rand(9) * 10
+        # ellipsoid = np.array([0, 0, 0, 1.0, 2.0, 3.0, 0, 0, 0.5], dtype=np.float64)
+        ell = create_o3d_ellipsoid(ellipsoid, (255, 0, 0))
+        vis.add_geometry(ell)
+        time.sleep(1)

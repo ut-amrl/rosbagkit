@@ -109,7 +109,9 @@ def main(args):
     np.savetxt(args.out_posefile, poses, fmt="%.6f %.8f %.8f %.8f %.8f %.8f %.8f %.8f")
     np.savetxt(args.out_timestamps, timestamps, fmt="%.6f")
 
-    print(f"{frame} pointclouds are compensated and saved to {args.out_pc_dir}")
+    print(
+        f"{frame} pointclouds are compensated and saved to {args.out_pc_dir}", end="\n"
+    )
 
 
 def get_args():

@@ -15,6 +15,6 @@ trap "echo 'Script interrupted'; exit;" SIGINT
 
 for scene in "${scenes[@]}" ; do
   python $PROJECT_DIR/src/static_map_generation/generate_static_map_wanda.py \
-    --dataset_dir=${dataset_dir} --scene=${scene} \
-    --blind=20.0 --voxel_size=0.5 --nb_neighbors=10 --std_ratio=1.0 --visualize
+    --dataset_dir $dataset_dir --scenes $scene \
+    --blind 20.0 --voxel_size 0.5 --nb_neighbors 10 --std_ratio 1.0 --visualize
 done

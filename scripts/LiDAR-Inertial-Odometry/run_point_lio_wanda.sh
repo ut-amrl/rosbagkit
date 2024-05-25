@@ -16,7 +16,7 @@ imu_topic="/wanda/imu/data"
 
 # Define the paths to your catkin workspace setup files
 setup_ws1="/home/dongmyeong/Projects/others/Point-LIO/devel/setup.bash"
-setup_ws2="/home/dongmyeong/Projects/interactive_slam/devel/setup.bash"
+setup_ws2="/home/dongmyeong/Projects/others/interactive_slam/devel/setup.bash"
 rviz=true
 
 # Function to handle script termination

@@ -6,10 +6,11 @@
 #include "manif/impl/eigen.h"
 #include "manif/impl/tangent_base.h"
 #include "manif/impl/assignment_assert.h"
+#include "manif/impl/cast.h"
 
 #include "manif/constants.h"
 
-#include "manif/tl/optional.hpp"
+#include <tl/optional.hpp>
 
 namespace manif {
 
@@ -415,7 +416,9 @@ template <class _NewScalar>
 typename LieGroupBase<_Derived>::template LieGroupTemplate<_NewScalar>
 LieGroupBase<_Derived>::cast() const
 {
-  return LieGroupTemplate<_NewScalar>(coeffs().template cast<_NewScalar>());
+  return internal::CastEvaluator<
+    typename internal::traits<_Derived>::Base, _NewScalar
+  >(derived()).run();
 }
 
 template <typename _Derived>

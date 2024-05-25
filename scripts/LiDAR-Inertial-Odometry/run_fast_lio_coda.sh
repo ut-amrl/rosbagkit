@@ -7,7 +7,7 @@ sequences=(0)
 
 # Define the paths to your catkin workspace setup files
 setup_ws1="/home/dongmyeong/Projects/others/fast-lio/devel/setup.bash"
-setup_ws2="/home/dongmyeong/Projects/interactive_slam/devel/setup.bash"
+setup_ws2="/home/dongmyeong/Projects/others/interactive_slam/devel/setup.bash"
 
 # Function to handle script termination
 cleanup() {
@@ -41,7 +41,7 @@ for seq in "${sequences[@]}"; do
       dataset:=coda \
       save_pose_only:=false \
       pose_file:=$dataset_dir/poses/fast_lio/$seq.txt \
-      dst_directory:=$dataset_dir/fast_lio_results/$seq ) &
+      dst_directory:=$dataset_dir/interactive_slam/$seq ) &
   PID2=$!
 
   # Wait for both background processes to start

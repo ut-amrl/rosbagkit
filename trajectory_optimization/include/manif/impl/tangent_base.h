@@ -9,7 +9,7 @@
 
 #include "manif/constants.h"
 
-#include "manif/tl/optional.hpp"
+#include <tl/optional.hpp>
 
 namespace manif {
 

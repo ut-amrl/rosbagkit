@@ -17,15 +17,14 @@
 #include "types/relative_pose_3d.h"
 #include "utils/read_pose.h"
 
-DEFINE_int32(seq, 0, "The sequence number.");
-DEFINE_string(input_kf_dir,
-              "/home/dongmyeong/Projects/AMRL/CODa/poses/global_keyframe/",
+DEFINE_string(input_kf_file,
+              "/home/dongmyeong/Projects/AMRL/CODa/poses/global_keyframe/0.txt",
               "The input keyframe poses.");
-DEFINE_string(input_odom_dir,
-              "/home/dongmyeong/Projects/AMRL/CODa/poses/dense_keyframe/",
+DEFINE_string(input_odom_file,
+              "/home/dongmyeong/Projects/AMRL/CODa/poses/dense_keyframe/1.txt",
               "The input odometry poses.");
-DEFINE_string(output_dir,
-              "/home/dongmyeong/Projects/AMRL/CODa/poses/",
+DEFINE_string(output_file,
+              "/home/dongmyeong/Projects/AMRL/CODa/poses/os1.txt",
               "The output poses.");
 
 namespace ut_amrl::slam {
@@ -215,23 +214,17 @@ int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   google::ParseCommandLineFlags(&argc, &argv, true);
 
-  CHECK(!FLAGS_input_kf_dir.empty()) << "The input keyframe directory is empty.";
-  CHECK(!FLAGS_input_odom_dir.empty()) << "The input odometry directory is empty.";
-  CHECK(!FLAGS_output_dir.empty()) << "The output directory is empty.";
-
-  std::string input_kf = FLAGS_input_kf_dir + std::to_string(FLAGS_seq) + ".txt";
-  std::string input_odom = FLAGS_input_odom_dir + std::to_string(FLAGS_seq) + ".txt";
-  LOG(INFO) << "Interpolate sequence " << FLAGS_seq;
-  LOG(INFO) << "Keyframe : " << input_kf;
-  LOG(INFO) << "Odometry : " << input_odom;
+  CHECK(!FLAGS_input_kf_file.empty()) << "The input keyframe file is empty.";
+  CHECK(!FLAGS_input_odom_file.empty()) << "The input odometry file is empty.";
+  CHECK(!FLAGS_output_file.empty()) << "The output directory is empty.";
 
   // Read the keyframe and odometry poses.
   ut_amrl::slam::MapOfPoses3d<double> kf_poses;
-  CHECK(ut_amrl::slam::readPoseFile(input_kf, &kf_poses));
+  CHECK(ut_amrl::slam::readPoseFile(FLAGS_input_kf_file, &kf_poses));
   LOG(INFO) << "Number of keyframe poses: " << kf_poses.size();
 
   ut_amrl::slam::MapOfPoses3d<double> odom_poses;
-  CHECK(ut_amrl::slam::readPoseFile(input_odom, &odom_poses));
+  CHECK(ut_amrl::slam::readPoseFile(FLAGS_input_odom_file, &odom_poses));
   LOG(INFO) << "Number of odometry poses: " << odom_poses.size();
 
   // Interpolate the keyframe poses with odometry poses using pose graph optimization
@@ -244,8 +237,7 @@ int main(int argc, char** argv) {
       << "Failed to solve the interpolation optimization problem.";
 
   // Write the interpolated poses.
-  std::string output_filename = FLAGS_output_dir + std::to_string(FLAGS_seq) + ".txt";
-  CHECK(ut_amrl::slam::outInterpolatedPoses(output_filename, interpolated_poses))
+  CHECK(ut_amrl::slam::outInterpolatedPoses(FLAGS_output_file, interpolated_poses))
       << "Failed to write the interpolated poses.";
 
   return 0;

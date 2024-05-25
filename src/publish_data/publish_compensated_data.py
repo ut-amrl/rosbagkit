@@ -129,10 +129,9 @@ def get_args():
 
     args.dataset_dir = pathlib.Path(args.dataset_dir)
     if args.dataset == "CODa":
-        args.pc_dir = args.dataset_dir / "3d_comp" / "os1" / f"{args.scene}"
-        args.pose_file = (
-            args.dataset_dir / "poses" / "point-lio" / f"sync_{args.scene}.txt"
-        )
+        args.pc_dir = args.dataset_dir / "3d_comp_new" / "os1" / f"{args.scene}"
+        args.pose_file = args.dataset_dir / "poses" / "fast-lio" / f"{args.scene}.txt"
+        # args.pose_file = args.dataset_dir / "poses" / f"{args.scene}.txt"
     elif args.dataset == "Wanda":
         args.pc_dir = args.dataset_dir / "3d_comp" / args.scene
         args.pose_file = args.dataset_dir / "poses" / args.scene / "os1.txt"

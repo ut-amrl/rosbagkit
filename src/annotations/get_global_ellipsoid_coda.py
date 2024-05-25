@@ -115,9 +115,9 @@ def fit_ellipsoid(bboxes):
     return result.x
 
 
-def cluster_fit_ellipsoid(bboxes, threshold=1.0, min_samples=2, visualize=False):
+def cluster_fit_ellipsoids(bboxes, threshold=1.0, min_samples=2, visualize=False):
     """
-    Clustering and fitting 3D bounding boxes
+    Clustering and fitting inscribed ellipsoids to 3D bounding boxes
 
     Args:
         bboxes: list of 3D bounding boxes (cX, cY, cZ, l, w, h, r, p, y)
@@ -126,12 +126,12 @@ def cluster_fit_ellipsoid(bboxes, threshold=1.0, min_samples=2, visualize=False)
 
     Returns:
         fitted_ellipsoids: list of fitted ellipsoids (cX, cY, cZ, a, b, c, r, p, y)
-                           inscribed ellipsoid of the 3D bounding boxes
     """
     if len(bboxes) == 0:
         return []
 
     vis = O3dVisualizer() if visualize else None
+    vis is None or vis.start()
 
     # Clustering
     centroids = np.array([bbox[:3] for bbox in bboxes])
@@ -150,27 +150,26 @@ def cluster_fit_ellipsoid(bboxes, threshold=1.0, min_samples=2, visualize=False)
         cluster_bboxes = np.array([bboxes[i] for i in indices])
 
         # Fit an ellipsoid
-        ellipsoid = fit_ellipsoid(cluster_bboxes)
+        fitted_ellipsoid = fit_ellipsoid(cluster_bboxes)
 
         # Visualize the fitted ellipsoid
         if vis:
-            for bbox in cluster_bboxes:
-                obb = create_o3d_3d_bbox(bbox, (1.0, 1.0, 1.0))
+            for bbox in cluster_bboxes[::5]:
+                obb = create_o3d_3d_bbox(bbox, (0.5, 0.5, 0.5))
                 vis.add_geometry(obb)
-            ell = create_o3d_ellipsoid(ellipsoid, (1.0, 1.0, 0.0))
+            ell = create_o3d_ellipsoid(fitted_ellipsoid, (1.0, 1.0, 0.0))
             vis.add_geometry(ell)
-            vis.update()
 
         fitted_result = {
             "id": int(unique_label),
-            "ellipsoid": ellipsoid,
+            "ellipsoid": fitted_ellipsoid,
             "indices": indices,
         }
         fitted_ellipsoids.append(fitted_result)
 
-    if vis:
-        vis.run()
-        vis.close()
+        # wait until key is pressed
+
+    vis is None or vis.close()
 
     return fitted_ellipsoids
 
@@ -209,9 +208,8 @@ def load_3d_annotations(pose, annotation_file):
 
 def main(args):
     global_bboxes = {class_name: [] for class_name in CLASSES}
-    fitted_bboxes = {class_name: [] for class_name in CLASSES}
 
-    # Accumulate 3D bounding boxes
+    # Load all 3D bounding boxes into the global frame
     for seq in args.sequences:
         pose_file = args.pose_dir / f"{seq}.txt"
         pose_np = np.loadtxt(pose_file).reshape(-1, 8)
@@ -232,10 +230,10 @@ def main(args):
             for class_name in CLASSES:
                 global_bboxes[class_name].extend(bboxes[class_name])
 
-    # Get fitted 3D bounding boxes
+    # Get fitted 3D ellipsoids
     for class_name in CLASSES:
         print(f"Clustering and fitting {class_name}...")
-        fitted_bboxes[class_name] = cluster_fit_ellipsoid(
+        fitted_ellipsoids = cluster_fit_ellipsoids(
             global_bboxes[class_name], visualize=args.visualize
         )
 
@@ -243,13 +241,14 @@ def main(args):
             "class": class_name,
             "instances": [
                 {
-                    "id": fitted_ellipse["id"],
+                    "id": fitted_result["id"],
                     **dict(
                         zip(
                             ["cX", "cY", "cZ", "a", "b", "c", "r", "p", "y"],
-                            fitted_ellipse["ellipsoid"],
+                            fitted_result["ellipsoid"],
                         )
                     ),
+                    # cluster of 3D bounding boxes (for debugging)
                     "3d_bboxes": [
                         dict(
                             zip(
@@ -257,10 +256,10 @@ def main(args):
                                 global_bboxes[class_name][idx],
                             )
                         )
-                        for idx in fitted_ellipse["indices"]
+                        for idx in fitted_result["indices"]
                     ],
                 }
-                for fitted_ellipse in fitted_bboxes[class_name]
+                for fitted_result in fitted_ellipsoids
             ],
         }
 
@@ -276,7 +275,6 @@ def main(args):
         with open(out_file, "w") as f:
             json.dump(bboxes_json, f, indent=4)
 
-        del fitted_bboxes[class_name]
         del global_bboxes[class_name]
 
 

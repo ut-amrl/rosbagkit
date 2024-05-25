@@ -57,6 +57,8 @@ def main(args):
     ref_poses = np.loadtxt(args.ref_posefile)[:, :8]
     print(f"Total {len(ref_poses)} pose data loaded from {args.ref_posefile}")
 
+    print(f"Loading pointcloud data from {args.pc_dir}")
+
     # Point Cloud Data and its Timestamp
     pc_files = natsorted(list(args.pc_dir.glob("*.bin")))
     timestamps = np.loadtxt(args.timestamp, dtype=np.float64)
@@ -85,7 +87,7 @@ def main(args):
 
     # Save the synchronized poses
     np.savetxt(args.out_posefile, poses, fmt="%.6f %.8f %.8f %.8f %.8f %.8f %.8f %.8f")
-    print(f"Saved the synchronized poses to {args.out_posefile}")
+    print(f"Saved the synchronized poses to {args.out_posefile}", end="\n")
 
 
 def get_args():

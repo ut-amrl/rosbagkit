@@ -52,13 +52,21 @@ def downsample_pointcloud(pc, voxel_size, nb_neighbors, std_ratio):
 
 
 def main(args):
-    print(f"Generating static map for scene: {args.scene}...")
+    print(f"Generating static map for scene: {args.scenes}...")
 
-    pose_np = np.loadtxt(args.pose_file)[:, :8]
-    pc_files = natsorted(pathlib.Path(args.pc_dir).glob("*.bin"))
-    assert len(pose_np) == len(pc_files), f"{len(pose_np)} != {len(pc_files)}"
+    accumulated_pointcloud = None
+    for pc_dir, pose_file in zip(args.pc_dirs, args.pose_files):
+        pose_np = np.loadtxt(pose_file)[:, :8]
+        pc_files = natsorted(pathlib.Path(pc_dir).glob("*.bin"))
+        assert len(pose_np) == len(pc_files), f"{len(pose_np)} != {len(pc_files)}"
 
-    accumulated_pc = accumulate_pointcloud(pc_files, pose_np, args.blind)
+        accumulated_pc = accumulate_pointcloud(pc_files, pose_np, args.blind)
+        if accumulated_pointcloud is None:
+            accumulated_pointcloud = accumulated_pc
+        else:
+            accumulated_pointcloud += accumulated_pc
+
+    # Downsample the accumulated pointcloud
     clean_pc = downsample_pointcloud(
         accumulated_pc, args.voxel_size, args.nb_neighbors, args.std_ratio
     )
@@ -81,26 +89,53 @@ def main(args):
 
 
 def get_args():
-    parser = argparse.ArgumentParser(description="Generate static map for wanda")
+    parser = argparse.ArgumentParser(description="Generate static map")
+    # Dataset
+    parser.add_argument(
+        "--dataset", type=str, default="CODa", choices=["CODa", "Wanda"]
+    )
     parser.add_argument("--dataset_dir", type=str, help="Path to the dataset")
-    parser.add_argument("--scene", type=str, help="Scene name")
+    parser.add_argument("--scenes", type=str, nargs="+", help="Scene names")
 
+    # Static map
+    parser.add_argument("--name", type=str, help="Name of the static map")
+    parser.add_argument(
+        "--extension", type=str, default="pcd", choices=["pcd", "npy", "bin"]
+    )
+
+    # Options
     parser.add_argument("--blind", type=float, default=15.0)
     parser.add_argument("--voxel_size", type=float, default=1.0)
     parser.add_argument("--nb_neighbors", type=int, default=100)
     parser.add_argument("--std_ratio", type=float, default=2.0)
-    parser.add_argument(
-        "--extension", type=str, default="pcd", choices=["pcd", "npy", "bin"]
-    )
     parser.add_argument("--visualize", action="store_true")
     args = parser.parse_args()
 
     args.dataset_dir = pathlib.Path(args.dataset_dir)
-    args.pose_file = args.dataset_dir / "poses" / args.scene / "os1.txt"
-    args.pc_dir = args.dataset_dir / "3d_comp" / args.scene
-    args.static_map_file = str(
-        args.dataset_dir / "static_map" / f"{args.scene}.{args.extension}"
-    )
+    if args.dataset == "CODa":
+        args.pc_dirs = [
+            args.dataset_dir / "3d_comp" / "os1" / scene for scene in args.scenes
+        ]
+        args.pose_files = [
+            args.dataset_dir / "poses" / f"{scene}.txt" for scene in args.scenes
+        ]
+        args.static_map_file = (
+            args.dataset_dir / "static_map" / f"CODa.{args.extension}"
+        )
+    elif args.dataset == "Wanda":
+        args.pc_dirs = [args.dataset_dir / "3d_comp" / scene for scene in args.scenes]
+        args.pose_files = [
+            args.dataset_dir / "poses" / scene / "os1.txt" for scene in args.scenes
+        ]
+        args.static_map_file = (
+            args.dataset_dir / "static_map" / f"{args.name}.{args.extension}"
+        )
+    else:
+        raise ValueError(f"Invalid dataset: {args.dataset}")
+
+    args.static_map_file.parent.mkdir(parents=True, exist_ok=True)
+    args.static_map_file = str(args.static_map_file)
+
     return args
 
 

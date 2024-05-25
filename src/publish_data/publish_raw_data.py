@@ -40,7 +40,7 @@ def main(args):
     # Point Cloud Data
     pc_files = natsorted(args.pc_dir.glob("*.bin"))
     print(f"Total {len(pc_files)} pointcloud files")
-    assert len(timestamps) == len(pc_files)
+    assert len(timestamps) == len(pc_files), f"{len(timestamps)} != {len(pc_files)}"
 
     shared_clock = SharedClock()
 
