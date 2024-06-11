@@ -2,11 +2,11 @@
 PROJECT_DIR=$(realpath $(dirname "$0")/../..)
 
 dataset_dir="/home/dongmyeong/Projects/datasets/CODa"
-sequences=(0 1 2 3 4 5 6 7 9 10 11)
+sequences=(3)
 
 origin_frame="map"
 pc_frame="os1"
-pc_topic="/ouster_points"
+pc_topic="/compensated_points"
 odom_topic="/odom"
 blind=3.0
 
@@ -47,7 +47,7 @@ for seq in "${sequences[@]}"; do
   python $PROJECT_DIR/src/publish_data/publish_compensated_data.py \
     --dataset CODa --dataset_dir $dataset_dir --scene $seq --blind $blind \
     --origin_frame $origin_frame --pc_frame $pc_frame \
-    --pc_topic $pc_topic --odom_topic $odom_topic &
+    --pc_topic $pc_topic --odom_topic $odom_topic -r 5 &
   wait $!
 
   echo "Terminating background processes..."

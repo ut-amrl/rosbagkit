@@ -51,6 +51,20 @@ def visualize_pointcloud(pointcloud, window_name="Point Cloud"):
     )
 
 
+def create_o3d_pointcloud(pointcloud, color=(1, 1, 1), voxel_size=None):
+    if isinstance(pointcloud, Iterable):
+        pointcloud = np.vstack(pointcloud)
+
+    pc_o3d = o3d.geometry.PointCloud()
+    pc_o3d.points = o3d.utility.Vector3dVector(pointcloud)
+    pc_o3d.paint_uniform_color(color)
+
+    if voxel_size is not None:
+        pc_o3d = pc_o3d.voxel_down_sample(voxel_size=voxel_size)
+
+    return pc_o3d
+
+
 def create_o3d_3d_bbox(bbox, color, degrees=False):
     """
     Create a 3D bounding box in Open3D
@@ -101,18 +115,54 @@ def create_o3d_ellipsoid(ellipsoid, color, degree=False):
     return ell
 
 
+def create_o3d_grid(x_min, x_max, y_min, y_max, grid_size, color=(0, 0, 0)):
+    lines = []
+
+    x_min = np.floor(x_min / grid_size) * grid_size
+    x_max = np.ceil(x_max / grid_size) * grid_size
+    y_min = np.floor(y_min / grid_size) * grid_size
+    y_max = np.ceil(y_max / grid_size) * grid_size
+
+    # Create vertical lines
+    for x in range(int(x_min), int(x_max) + grid_size, grid_size):
+        lines.append([[x, y_min, 0], [x, y_max, 0]])
+
+    # Create horizontal lines
+    for y in range(int(y_min), int(y_max) + grid_size, grid_size):
+        lines.append([[x_min, y, 0], [x_max, y, 0]])
+
+    # Create LineSet for grid visualization
+    grid_lines = o3d.geometry.LineSet()
+    points = np.array([point for line in lines for point in line])
+    line_indices = [[i, i + 1] for i in range(0, len(points), 2)]
+
+    grid_lines.points = o3d.utility.Vector3dVector(points)
+    grid_lines.lines = o3d.utility.Vector2iVector(line_indices)
+    grid_lines.paint_uniform_color(color)
+    return grid_lines
+
+
 if __name__ == "__main__":
     vis = O3dVisualizer()
     vis.start()
 
-    coord_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(
-        size=10, origin=[0, 0, 0]
-    )
-    vis.add_geometry(coord_frame)
+    # coord_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(
+    #     size=10, origin=[0, 0, 0]
+    # )
+    # vis.add_geometry(coord_frame)
 
-    for _ in range(10):
-        ellipsoid = np.random.rand(9) * 10
-        # ellipsoid = np.array([0, 0, 0, 1.0, 2.0, 3.0, 0, 0, 0.5], dtype=np.float64)
-        ell = create_o3d_ellipsoid(ellipsoid, (255, 0, 0))
-        vis.add_geometry(ell)
-        time.sleep(1)
+    # for _ in range(10):
+    #     ellipsoid = np.random.rand(9) * 10
+    #     # ellipsoid = np.array([0, 0, 0, 1.0, 2.0, 3.0, 0, 0, 0.5], dtype=np.float64)
+    #     ell = create_o3d_ellipsoid(ellipsoid, (255, 0, 0))
+    #     vis.add_geometry(ell)
+    #     time.sleep(1)
+
+    x_min, x_max = -50, 50
+    y_min, y_max = -50, 50
+    grid_size = 10
+
+    grid = create_o3d_grid(x_min, x_max, y_min, y_max, grid_size)
+
+    # Visualize the grid
+    o3d.visualization.draw_geometries([grid], window_name="Grid Visualization")

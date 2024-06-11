@@ -23,10 +23,10 @@ def project_to_image(points, extrinsic, intrinsic, img_size, dist_coeffs=None):
     assert dist_coeffs is None or len(dist_coeffs) == 5, f"{len(dist_coeffs)} != 5"
     assert len(img_size) == 2, f"{len(img_size)} != 2"
 
-    # Transform points to camera coordinate system
+    # Transform points to camera coordinate system (LiDAR -> Camera)
     points_cam = points @ extrinsic[:3, :3].T + extrinsic[:3, 3].T
-    front_mask = points_cam[:, 2] > 0
-    # front_mask = np.logical_and(points_cam[:, 2] > 0, points_cam[:, 2] < 10)
+    # front_mask = points_cam[:, 2] > 0
+    front_mask = np.logical_and(points_cam[:, 2] > 0, points_cam[:, 2] < 10)
 
     # Project points onto the image plane
     projected_points = points_cam[front_mask, :] / points_cam[front_mask, 2, None]

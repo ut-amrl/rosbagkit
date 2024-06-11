@@ -2,15 +2,14 @@
 PROJECT_DIR=$(realpath $(dirname "$0")/../..)
 
 dataset_dir="/home/dongmyeong/Projects/datasets/CODa"
-# sequences=(0 1 2 3 4 5 6 7 9 10 11 12 13 16 17 18 19 20 21 22)
-sequences=(20)
+sequences=(1 2 3 4 5 6 7 9 10 11 12 13 16 17 18 19 20 21 22 0)
 
 pc_frame="os1"
 pc_topic="/ouster_points"
 imu_topic="/imu/data"
 
 # Define the paths to your catkin workspace setup files
-setup_ws1="/home/dongmyeong/Projects/others/Point-LIO/devel/setup.bash"
+setup_ws1="/home/dongmyeong/Projects/others/ct_icp_ws/devel/setup.bash"
 setup_ws2="/home/dongmyeong/Projects/others/interactive_slam/devel/setup.bash"
 rviz=true
 
@@ -27,26 +26,24 @@ trap cleanup SIGINT
 
 # Check if roscore is already running
 if pgrep -x "roscore" > /dev/null; then
-  # Kill existing roscore
   pkill -f "roscore"
   sleep 3
 fi
 
-# Start roscore
-roscore & PID3=$!
-sleep 3
-
 # LiDAR-Inertial Odometry
 for seq in "${sequences[@]}"; do
-  # Start Point-LIO
-  ( source $setup_ws1 && exec roslaunch point_lio mapping_coda.launch rviz:=$rviz --wait ) &
+  # Start roscore
+  roscore & PID=$!
+  sleep 3
+
+  # Start CT_ICP
+  ( source $setup_ws1 && exec roslaunch ct_icp_odometry coda.launch --wait ) &
   PID1=$!
 
   # Start odometry_saver
-  ( source $setup_ws2 && exec roslaunch odometry_saver point_lio.launch \
-      dataset:=coda \
+  ( source $setup_ws2 && exec roslaunch odometry_saver ct_icp.launch \
       save_pose_only:=true \
-      pose_file:=$dataset_dir/poses/point-lio/$seq.txt ) &
+      pose_file:=$dataset_dir/poses/ct-icp_end/$seq.txt --wait ) &
   PID2=$!
 
   # Wait for both background processes to start
@@ -59,10 +56,7 @@ for seq in "${sequences[@]}"; do
   wait $!
 
   echo "Rosbag play finished. Terminating background processes..."
-  kill $PID1 $PID2
-  wait $PID1 $PID2 2>/dev/null
+  kill $PID1 $PID2 $PID
+  wait $PID1 $PID2 $PID 2>/dev/null
 done
 echo "All done!"
-
-kill $PID
-wait $PID 2>/dev/null

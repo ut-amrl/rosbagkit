@@ -35,9 +35,9 @@ class SharedClock:
 
 def publish_clock(clock_pub, shared_clock, timestamps, rate=1):
     interval = rospy.Duration.from_sec(1.0 / 1000)  # 1kHz
-    first_time = rospy.Time.from_sec(timestamps[0])
+    first_time = rospy.Time.from_sec(timestamps[0] - 3.0)
     curr_time = first_time
-    last_time = rospy.Time.from_sec(timestamps[-1] + 1.0)
+    last_time = rospy.Time.from_sec(timestamps[-1] + 3.0)
     total_duration = (last_time - curr_time).to_sec()
 
     while curr_time < last_time and not rospy.is_shutdown():
@@ -108,6 +108,7 @@ def publish_pointcloud(
 
 
 def process_pointcloud(bin_path, dt, frame_id, timestamp):
+    """simulate raw pointcloud data from a binary file"""
     N_HORIZON = 1024
     N_RING = 128
 

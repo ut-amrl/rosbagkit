@@ -34,7 +34,7 @@ def xyz_quat_to_SE3(pose: np.ndarray) -> SE3:
     """Convert the pose [x, y, z, qw, qx, qy, qz] to an SE(3)"""
     assert pose.shape == (7,), f"{pose.shape} != (7,)"
     position = np.array(pose[:3])  # [x, y, z]
-    quaternion = np.array(pose[[4, 5, 6, 3]])  # [qx, qy, qz, qw]
+    quaternion = np.array(pose[[4, 5, 6, 3]], dtype=np.float64)  # [qx, qy, qz, qw]
     quaternion /= np.linalg.norm(quaternion)
     return SE3(position, quaternion)
 
@@ -98,15 +98,31 @@ def average_rpy(rotations: List[np.ndarray], degrees=False) -> np.ndarray:
 
 
 if __name__ == "__main__":
-    X = SO3.Random()
-    rotations = []
-    for i in range(10):
-        w = SO3Tangent(np.random.normal(0, 0.01, 3))
-        rotations.append((X + w).rotation())
+    # X = SO3.Random()
+    # rotations = []
+    # for i in range(10):
+    #     w = SO3Tangent(np.random.normal(0, 0.01, 3))
+    #     rotations.append((X + w).rotation())
 
-    avg_R = average_SO3(rotations)
-    print(avg_R)
-    print(X.rotation())
+    # avg_R = average_SO3(rotations)
+    # print(avg_R)
+    # print(X.rotation())
 
-    rpy = average_rpy([R.from_matrix(rot).as_euler("xyz") for rot in rotations])
-    print(R.from_euler("xyz", rpy).as_matrix())
+    # rpy = average_rpy([R.from_matrix(rot).as_euler("xyz") for rot in rotations])
+    # print(R.from_euler("xyz", rpy).as_matrix())
+
+    X = SE3.Random()
+    pose = SE3_to_xyz_quat(X)
+    print(pose)
+
+    pose_matrix = xyz_quat_to_matrix(pose)
+    print(pose_matrix)
+
+    print(SE3_to_xyz_quat(matrix_to_SE3(pose_matrix)))
+    print(xyz_quat_to_matrix(SE3_to_xyz_quat(matrix_to_SE3(pose_matrix))))
+
+    pose_SE3 = xyz_quat_to_SE3(pose)
+    pose_SE3_inv = pose_SE3.inverse()
+    pose_inv = SE3_to_xyz_quat(pose_SE3_inv)
+    print(pose_inv)
+    print(xyz_quat_to_matrix(pose_inv))

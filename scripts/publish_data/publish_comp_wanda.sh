@@ -13,7 +13,7 @@ scenes=(
 
 origin_frame="map"
 pc_frame="os1"
-pc_topic="/ouster_points"
+pc_topic="/compensated_points"
 odom_topic="/odom"
 blind=0.0
 

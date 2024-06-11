@@ -58,6 +58,7 @@ def main(args):
         source_frame = transform["source_frame"]
         target_frame = transform["target_frame"]
         outfile = transform["outfile"]
+        print(f"Extracting transform from {source_frame} to {target_frame}...")
 
         trans, rot = get_transform(tf_buffer, source_frame, target_frame)
         if trans is not None and rot is not None:

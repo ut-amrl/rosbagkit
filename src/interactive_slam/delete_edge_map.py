@@ -48,8 +48,7 @@ def main(args):
             outfile.write(line)
 
     shutil.copy2(args.input_file, args.input_file + ".bak")
-
-    os.replace(temp_file.name, args.input_file)
+    shutil.move(temp_file.name, args.input_file)
     print(f"Deleted {delete_count} edges.")
 
 
@@ -64,14 +63,14 @@ def get_args():
         "-d",
         "--distance",
         type=float,
-        default=0,
+        default=5.0,
         help="minimum distance threshold (m) between consecutive edges.",
     )
     parser.add_argument(
         "-a",
         "--angle",
         type=float,
-        default=0,
+        default=0.5,
         help="minimum angle threshold (rad) between consecutive edges.",
     )
     parser.add_argument(

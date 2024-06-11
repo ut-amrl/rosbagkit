@@ -1,14 +1,21 @@
 import numpy as np
+from typing import Literal
+from scipy.spatial.transform import Rotation as R
+from scipy.spatial.transform import Slerp
 
 from src.utils.lie_math import xyz_quat_to_SE3, SE3_to_xyz_quat, xyz_quat_to_matrix
 
 
 class PoseInterpolator:
-    def __init__(self, poses: np.ndarray):
+    def __init__(
+        self, poses: np.ndarray, method: Literal["linear", "slerp"] = "linear"
+    ):
         """poses: (N, 8) [time, x, y, z, qw, qx, qy, qz]"""
         assert poses.shape[1] == 8, f"{poses.shape} != (N, 8)"
+        assert method in ["linear", "slerp"], f"{method} not in ['linear', 'slerp']"
         self.poses = poses
         self._sort_poses()
+        self.method = method
 
     def _sort_poses(self):
         """Sort the poses based on the time"""
@@ -22,10 +29,28 @@ class PoseInterpolator:
 
         lower_SE3 = xyz_quat_to_SE3(lower_pose[1:])
         upper_SE3 = xyz_quat_to_SE3(upper_pose[1:])
-        t = (time - lower_pose[0]) / (upper_pose[0] - lower_pose[0])
 
-        # T_interpolated = T_lower * exp(t * log(T_lower^-1 * T_upper))
-        interpolated_SE3 = lower_SE3 + t * (upper_SE3 - lower_SE3)
+        alpha = (time - lower_pose[0]) / (upper_pose[0] - lower_pose[0])
+
+        if self.method == "linear":
+            # T_interpolated = T_lower * exp(alpha * log(T_lower^-1 * T_upper))
+            interpolated_SE3 = lower_SE3 + alpha * (upper_SE3 - lower_SE3)
+        elif self.method == "slerp":
+            key_times = [lower_pose[0], upper_pose[0]]
+            key_rots = R.from_quat(
+                [
+                    lower_pose[[5, 6, 7, 4]],
+                    upper_pose[[5, 6, 7, 4]],
+                ]
+            )
+            slerp = Slerp(key_times, key_rots)
+            t_interp = (1 - alpha) * lower_pose[1:4] + alpha * upper_pose[1:4]
+            q_interp = slerp(time).as_quat()[[3, 0, 1, 2]]
+
+            interpolated_SE3 = xyz_quat_to_SE3(np.concatenate([t_interp, q_interp]))
+        else:
+            raise ValueError(f"Unknown method: {self.method}")
+
         return interpolated_SE3
 
     def _get_relative_SE3(self, source_time, target_time):
@@ -106,7 +131,7 @@ if __name__ == "__main__":
         ]
     )
 
-    pose_interpolator = PoseInterpolator(poses)
+    pose_interpolator = PoseInterpolator(poses, "slerp")
     a = pose_interpolator.get_relative_transform(0, 1)
     b = pose_interpolator.get_relative_transform(3, 4)
 

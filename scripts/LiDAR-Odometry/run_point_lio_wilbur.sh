@@ -1,13 +1,13 @@
 #!/bin/bash
 PROJECT_DIR=$(realpath $(dirname "$0")/../..)
 
-dataset_dir="/home/dongmyeong/Projects/datasets/SARA/crl_rzr"
+dataset_dir="/home/dongmyeong/Projects/datasets/SARA/wilbur"
 scenes=(
-  gq_TN_e3-baseline_rfv_250_remission_01_2024-02-09-14-39-36
+  mout-forest-loop-1_2024-04-10-10-29-03
 )
 
-pc_topic="/crl_rzr/velodyne_front_horiz_points"
-imu_topic="/crl_rzr/imu/data"
+pc_topic="/wilbur/lidar_points_center"
+imu_topic="/wilbur/imu/data"
 
 # Define the paths to your catkin workspace setup files
 setup_ws1="/home/dongmyeong/Projects/others/Point-LIO/devel/setup.bash"
@@ -39,14 +39,15 @@ sleep 3
 # LiDAR-Inertial Odometry
 for scene in "${scenes[@]}"; do
   # Start Point-LIO
-  ( source $setup_ws1 && exec roslaunch point_lio mapping_crl_rzr.launch rviz:=$rviz --wait ) &
+  ( source $setup_ws1 && exec roslaunch point_lio mapping_wilbur.launch rviz:=$rviz --wait ) &
   PID1=$!
 
   # Start odometry_saver
   ( source $setup_ws2 && exec roslaunch odometry_saver point_lio.launch \
-      dataset:=crl_rzr \
-      save_pose_only:=true \
-      pose_file:=$dataset_dir/poses/$scene/point_lio.txt ) &
+      dataset:=wilbur \
+      save_pose_only:=false \
+      pose_file:=$dataset_dir/poses/$scene/point_lio.txt \
+      dst_directory:=$dataset_dir/point-lio_results/$scene --wait ) &
   PID2=$!
 
   # Wait for both background processes to start

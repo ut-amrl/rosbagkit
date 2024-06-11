@@ -19,6 +19,7 @@ from src.utils.camera import load_extrinsic_matrix, load_camera_params
 from src.utils.projection import project_to_rectified, project_to_image
 from src.utils.pose_interpolator import PoseInterpolator
 from src.utils.extrinsic_calibrator import ExtrinsicCalibrator
+from src.utils.lie_math import xyz_quat_to_matrix
 
 
 class OffsetTuner:
@@ -75,51 +76,70 @@ class OffsetTuner:
         return offset_value
 
 
+def alternating_indices(n):
+    """Generate alternating indices from -n to n
+
+    Example: n=5 -> [0, -1, 1, -2, 2, -3, 3, -4, 4]
+    """
+    yield 0
+    for i in range(1, n):
+        yield -i
+        yield i
+
+
 def main(args):
     print(f"Visualizing projected pointcloud for {args.scene}")
 
     # Load the point cloud files and poses
-    pc_files = list(map(str, natsorted(args.pc_dir.glob("*.bin"))))
+    pc_files = natsorted(args.pc_dir.glob("*.bin"))
     poses = np.loadtxt(args.pose_file)  # timestamp, x, y, z, qw, qx, qy, qz
-    assert len(pc_files) == len(poses)
+    assert len(pc_files) == len(poses), f"{len(pc_files)} != {len(poses)}"
     print(f"Loaded {len(pc_files)} pointclouds and poses")
-    print(f"pose file: {args.pose_file}")
 
     # Load the images and timestamps
-    img_files = list(map(str, natsorted(args.img_dir.glob("*.jpg"))))
+    img_files = natsorted(args.img_dir.glob("*.jpg"))
     img_timestamps = np.loadtxt(args.img_timestamps)
-    assert len(img_files) == len(img_timestamps)
-    print(f"Loaded {len(img_files)} left images and timestamps")
+    assert len(img_files) == len(
+        img_timestamps
+    ), f"{len(img_files)} != {len(img_timestamps)}"
+    print(f"Loaded {len(img_files)} images and timestamps")
 
     # Load the calibrations
     extrinsic = load_extrinsic_matrix(args.cam_extrinsics)
     cam_params = load_camera_params(args.cam_intrinsics)
 
     # Interpolate the LiDAR poses to the image timestamps
-    pose_interpolator = PoseInterpolator(poses)
+    pose_interpolator = PoseInterpolator(poses, "slerp")
 
-    idx = 11200
-
+    idx = 6850
     offset_tuner = OffsetTuner()
 
-    i = -1
     for img_file, img_ts in zip(img_files[idx:], img_timestamps[idx:]):
-        i += 1
-        print(f"Processing image {i+idx+1}/{len(img_files)}")
-
         # Get the corresponding pointcloud
-        pc_idx = np.argmin(np.abs(poses[:, 0] - img_ts))
-        pc_ts = poses[pc_idx, 0]
-        pc = np.fromfile(pc_files[pc_idx], dtype=np.float32).reshape(-1, 3)
+        close_pc_idx = np.argmin(np.abs(poses[:, 0] - img_ts))
+        pc_ts = poses[close_pc_idx, 0]
 
+        # Accumulate the pointclouds
+        accumulated_pc = np.zeros((0, 3))
+        for i in alternating_indices(args.window_size // 2):
+            pc_idx = close_pc_idx + i
+            pc = np.fromfile(str(pc_files[pc_idx]), dtype=np.float32).reshape(-1, 3)
+            hwl = xyz_quat_to_matrix(poses[pc_idx, 1:])
+
+            pc_world = pc @ hwl[:3, :3].T + hwl[:3, 3].T
+            accumulated_pc = np.vstack((accumulated_pc, pc_world))
+
+        print(f"Accumulated {len(accumulated_pc)} points")
+        print(f"image: {img_file.stem}, pc: {pc_files[close_pc_idx].stem}")
+
+        # Project the accumulated pointcloud
         while True:
             offset = offset_tuner.get_offset()
 
-            # Interpolate the pose to the image timestamp
-            H_relative = pose_interpolator.get_relative_transform(
-                source_time=pc_ts, target_time=img_ts + offset
-            )
-            pc_curr = pc @ H_relative[:3, :3].T + H_relative[:3, 3].T
+            # get interpolated the pose to the image timestamp
+            Hwt = pose_interpolator.get_interpolated_transform(img_ts + offset)
+            Htw = np.linalg.inv(Hwt)
+            pc_curr = accumulated_pc @ Htw[:3, :3].T + Htw[:3, 3].T
 
             if args.img_type == "raw":
                 pc_img, depth, _ = project_to_image(
@@ -150,7 +170,7 @@ def main(args):
             depth_colormap = plt.get_cmap("jet")(depth_normalized)
 
             # Draw the projected pointcloud
-            image = cv2.imread(img_file)
+            image = cv2.imread(str(img_file))
             for (x, y), color in zip(pc_img, depth_colormap):
                 x, y = int(x), int(y)
                 r, g, b, _ = (np.array(color) * 255).astype(np.uint8)
@@ -172,6 +192,7 @@ def get_args():
     parser.add_argument(
         "--img_type", type=str, choices=["raw", "rectified", "undistorted"]
     )
+    parser.add_argument("--window_size", type=int, default=1, help="Window size (odd)")
     args = parser.parse_args()
 
     args.dataset_dir = pathlib.Path(args.dataset_dir)
@@ -180,21 +201,13 @@ def get_args():
     elif args.dataset == "Wanda":
         args.pc_dir = args.dataset_dir / "3d_comp" / args.scene
         args.pose_file = args.dataset_dir / "poses" / args.scene / "os1.txt"
-        # args.img_dir = args.dataset_dir / "2d_rect" / args.scene / "left"
-        # args.img_timestamps = (
-        #     args.dataset_dir / "timestamps" / args.scene / "img_left.txt"
-        # )
-        # args.calib_dir = args.dataset_dir / "calibrations" / args.scene
-        # args.cam_intrinsics = args.calib_dir / "cam_left_intrinsics.yaml"
-        # args.cam_extrinsics = args.calib_dir / "os_to_cam_left.yaml"
-
-        args.img_dir = args.dataset_dir / "2d_rect" / args.scene / "right"
+        args.img_dir = args.dataset_dir / "2d_rect" / args.scene / "left"
         args.img_timestamps = (
-            args.dataset_dir / "timestamps" / args.scene / "img_right.txt"
+            args.dataset_dir / "timestamps" / args.scene / "img_left.txt"
         )
         args.calib_dir = args.dataset_dir / "calibrations" / args.scene
-        args.cam_intrinsics = args.calib_dir / "cam_right_intrinsics.yaml"
-        args.cam_extrinsics = args.calib_dir / "os_to_cam_right.yaml"
+        args.cam_intrinsics = args.calib_dir / "cam_left_intrinsics.yaml"
+        args.cam_extrinsics = args.calib_dir / "os_to_cam_left.yaml"
     else:
         raise ValueError("Invalid dataset")
 

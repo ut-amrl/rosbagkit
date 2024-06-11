@@ -37,14 +37,12 @@ def motion_compensation(pc_file, scan_ts, dt, pose_interpolator):
     # Motion compensation
     compensated_pc = np.zeros((N_RING * N_HORIZON, 3), dtype=np.float32)
     for idx, timestamp in enumerate(timestamps):
-        pc_packet = np.hstack([points[:, idx, :], np.ones((N_RING, 1))])
-
-        relative_transform = pose_interpolator.get_relative_transform(
+        rel_transform = pose_interpolator.get_relative_transform(
             source_time=timestamp, target_time=scan_ts
         )
 
         compensated_pc[idx * N_RING : (idx + 1) * N_RING] = (
-            pc_packet @ relative_transform[:3].T
+            points[:, idx, :] @ rel_transform[:3, :3].T + rel_transform[:3, 3].T
         )
 
     return compensated_pc, pose_interpolator.get_interpolated_pose(scan_ts)
@@ -66,7 +64,7 @@ def main(args):
     assert len(pc_files) == len(timestamps), f"{len(pc_files)} != {len(timestamps)}"
 
     # Create the pose interpolator
-    pose_interpolator = PoseInterpolator(ref_poses)
+    pose_interpolator = PoseInterpolator(ref_poses, "slerp")
 
     poses = np.zeros((len(timestamps), 8))
     for idx, ts in tqdm(enumerate(timestamps), total=len(timestamps)):
@@ -96,15 +94,15 @@ def get_args():
     parser.add_argument("--seq", type=int, help="Sequence number")
     parser.add_argument("--ref_posefile", type=str, help="Path to the dense pose file")
     parser.add_argument("--out_posefile", type=str, help="Path to the output pose file")
-
     args = parser.parse_args()
 
     args.dataset_dir = pathlib.Path(args.dataset_dir)
     args.pc_dir = args.dataset_dir / "3d_raw" / "os1" / str(args.seq)
     args.timestamp = args.dataset_dir / "timestamps" / f"{args.seq}.txt"
 
-    args.out_dir = args.dataset_dir / "3d_comp" / "os1" / str(args.seq)
+    args.out_dir = args.dataset_dir / "3d_comp_new" / "os1" / str(args.seq)
     os.makedirs(args.out_dir, exist_ok=True)
+    os.makedirs(os.path.dirname(args.out_posefile), exist_ok=True)
 
     return args
 

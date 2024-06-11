@@ -14,16 +14,19 @@ import numpy as np
 import open3d as o3d
 
 from src.utils.lie_math import xyz_quat_to_matrix
+from src.utils.o3d_visualization import create_o3d_grid
 
 
-def accumulate_pointcloud(pc_files, pose_np, blind):
+def accumulate_pointcloud(pc_files, pose_np, blind, skip=30):
     """Accumulate pointclouds based on the poses"""
     accumulated_pc_o3d = o3d.geometry.PointCloud()
     for pose, pc_file in tqdm(
-        zip(pose_np, pc_files), total=len(pose_np), desc="Accumulating Pointclouds"
+        zip(pose_np[::skip], pc_files[::skip]),
+        total=len(pose_np // skip),
+        desc="Accumulating Pointclouds",
     ):
         Hwl = xyz_quat_to_matrix(pose[1:])
-        pc_np = np.fromfile(pc_file, dtype=np.float32).reshape(-1, 3)
+        pc_np = np.fromfile(pc_file, dtype=np.float32).reshape(-1, 4)[:, :3]
         # Remove points within the blind region
         pc_np = pc_np[np.linalg.norm(pc_np, axis=1) > blind]
 
@@ -54,38 +57,57 @@ def downsample_pointcloud(pc, voxel_size, nb_neighbors, std_ratio):
 def main(args):
     print(f"Generating static map for scene: {args.scenes}...")
 
-    accumulated_pointcloud = None
+    all_accumulated_pc_o3d = None
     for pc_dir, pose_file in zip(args.pc_dirs, args.pose_files):
+        if not pathlib.Path(pose_file).exists():
+            print(f"No Exist: {pose_file}")
+            continue
+
         pose_np = np.loadtxt(pose_file)[:, :8]
         pc_files = natsorted(pathlib.Path(pc_dir).glob("*.bin"))
-        assert len(pose_np) == len(pc_files), f"{len(pose_np)} != {len(pc_files)}"
+        if len(pose_np) != len(pc_files):
+            print(f"Skipping {pc_dir}, {len(pose_np)} != {len(pc_files)}")
+            continue
 
-        accumulated_pc = accumulate_pointcloud(pc_files, pose_np, args.blind)
-        if accumulated_pointcloud is None:
-            accumulated_pointcloud = accumulated_pc
+        accumulated_pc_o3d = accumulate_pointcloud(pc_files, pose_np, args.blind)
+
+        if all_accumulated_pc_o3d is None:
+            all_accumulated_pc_o3d = accumulated_pc_o3d
         else:
-            accumulated_pointcloud += accumulated_pc
+            all_accumulated_pc_o3d += accumulated_pc_o3d
 
     # Downsample the accumulated pointcloud
-    clean_pc = downsample_pointcloud(
-        accumulated_pc, args.voxel_size, args.nb_neighbors, args.std_ratio
+    downsampled_pc_o3d = downsample_pointcloud(
+        all_accumulated_pc_o3d, args.voxel_size, args.nb_neighbors, args.std_ratio
     )
+
+    x_min = np.min(np.asarray(accumulated_pc_o3d.points)[:, 0])
+    x_max = np.max(np.asarray(accumulated_pc_o3d.points)[:, 0])
+    y_min = np.min(np.asarray(accumulated_pc_o3d.points)[:, 1])
+    y_max = np.max(np.asarray(accumulated_pc_o3d.points)[:, 1])
 
     # Save the static map
     if args.extension == "pcd":
-        o3d.io.write_point_cloud(args.static_map_file, clean_pc)
+        o3d.io.write_point_cloud(args.static_map_file, downsampled_pc_o3d)
     elif args.extension == "npy":
-        static_map_np = np.asarray(clean_pc.points, dtype=np.float32)
+        static_map_np = np.asarray(downsampled_pc_o3d.points, dtype=np.float32)
         np.save(args.static_map_file, static_map_np)
     elif args.extension == "bin":
-        static_map_np = np.asarray(clean_pc.points, dtype=np.float32)
+        static_map_np = np.asarray(downsampled_pc_o3d.points, dtype=np.float32)
         static_map_np.tofile(args.static_map_file)
     else:
         raise ValueError(f"Invalid extension: {args.extension}")
-    print(f"{len(clean_pc.points)} points saved to {args.static_map_file}\n")
+    print(f"{len(downsampled_pc_o3d.points)} points saved to {args.static_map_file}\n")
 
     if args.visualize:
-        o3d.visualization.draw_geometries([clean_pc], window_name="Static Map")
+        print(f"Distance Scale: x={x_max-x_min}, y={y_max-y_min}")
+        coordinate_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(
+            size=10.0, origin=[0, 0, 0]
+        )
+        grid = create_o3d_grid(x_min, x_max, y_min, y_max, 50)
+        o3d.visualization.draw_geometries(
+            [downsampled_pc_o3d, coordinate_frame, grid], window_name="Static Map"
+        )
 
 
 def get_args():
@@ -117,10 +139,10 @@ def get_args():
             args.dataset_dir / "3d_comp" / "os1" / scene for scene in args.scenes
         ]
         args.pose_files = [
-            args.dataset_dir / "poses" / f"{scene}.txt" for scene in args.scenes
+            args.dataset_dir / "correct" / f"{scene}.txt" for scene in args.scenes
         ]
         args.static_map_file = (
-            args.dataset_dir / "static_map" / f"CODa.{args.extension}"
+            args.dataset_dir / "static_map" / f"{args.name}.{args.extension}"
         )
     elif args.dataset == "Wanda":
         args.pc_dirs = [args.dataset_dir / "3d_comp" / scene for scene in args.scenes]

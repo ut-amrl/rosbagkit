@@ -1,9 +1,15 @@
 #!/bin/bash
 PROJECT_DIR=$(realpath $(dirname "$0")/../..)
 
-dataset_dir="/home/dongmyeong/Projects/datasets/CODa"
-sequences=(0)
-#sequences=(0 1 2 3 4 5 6 7 9 10 11 12 13 16 17 18 19 20 21 22)
+dataset_dir="/home/dongmyeong/Projects/datasets/SARA/wanda"
+scenes=(
+  gq_appld_south_tour_01_2024-03-14-10-08-34
+  gq_appld_wandagq_32_field_foresttrail_06_2024-03-15-11-17-44
+  gq_appld_wandagq_32_forest_02_2024-03-15-12-02-37
+  gq_appld_wandagq_32_forest_03_2024-03-15-12-16-36
+  gq_appld_forest_mission_autonomous_deployment_01_2024-03-12-14-15-49
+  gq_TN_Menu_A_datacollect_02_2024-02-21-17-23-09
+)
 
 # Define the paths to your catkin workspace setup files
 setup_ws1="/home/dongmyeong/Projects/others/fast-lio/devel/setup.bash"
@@ -31,25 +37,25 @@ fi
 roscore & PID=$!
 sleep 3
 
-for seq in "${sequences[@]}"; do
-  # Start the first command in the background with its workspace sourced
-  ( source $setup_ws1 && exec roslaunch fast_lio mapping_coda.launch --wait ) &
+for scene in "${scenes[@]}"; do
+  # Start FAST-LIO
+  ( source $setup_ws1 && exec roslaunch fast_lio mapping_wanda.launch --wait ) &
   PID1=$!
 
-  # Start the second command in the background with its workspace sourced
+  # Start odometry_saver
   ( source $setup_ws2 && exec roslaunch odometry_saver fast_lio.launch \
-      dataset:=coda \
+      dataset:=wanda \
       save_pose_only:=false \
-      pose_file:=$dataset_dir/poses/fast_lio/$seq.txt \
-      dst_directory:=$dataset_dir/interactive_slam/$seq ) &
+      pose_file:=$dataset_dir/poses/$scene/fast_lio.txt \
+      dst_directory:=$dataset_dir/fast-lio_results/$scene ) &
   PID2=$!
 
   # Wait for both background processes to start
   sleep 3
 
-  # Execute the third command in the foreground
-  python $PROJECT_DIR/src/publish_data/publish_raw_data.py \
-    --dataset CODa --dataset_dir $dataset_dir --scene $seq &
+  # Start rosbag play
+  rosbag play $dataset_dir/bagfiles/$scene.bag \
+    --clock --topic /wanda/lidar_points /wanda/imu/data &
   wait $!
 
   echo "Rosbag play finished. Terminating background processes..."
@@ -58,12 +64,13 @@ for seq in "${sequences[@]}"; do
 
   # echo "Converting odometry format..."
   # python $PROJECT_DIR/src/interactive_slam/convert_odom_format.py \
-  #   --odom_dir $dataset_dir/fast_lio_results/$seq \
-  #   --pc_outdir $dataset_dir/3d_comp/$seq \
-  #   --pose_outfile $dataset_dir/poses/os1/$seq.txt \
-  #   --prefix 3d_comp_os1_${seq}_
+  #   --odom_dir $dataset_dir/fast_lio_results/$scene \
+  #   --pc_outdir $dataset_dir/3d_comp/$scene \
+  #   --pose_outfile $dataset_dir/poses/$scene/os1.txt \
+  #   --prefix 3d_comp_os1_
 done
 echo "All done!"
 
+# Terminate roscore
 kill $PID
 wait $PID 2>/dev/null

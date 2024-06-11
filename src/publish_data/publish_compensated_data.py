@@ -44,6 +44,7 @@ def main(args):
     pc_files = natsorted(args.pc_dir.glob("*.bin"))
     pc_timestamps = pose_np[:, 0]
     assert len(pose_np) == len(pc_files), f"{len(pose_np)} != {len(pc_files)}"
+    print(f"Total {len(pose_np)} pose data loaded from {args.pose_file}")
 
     # Start-up delay
     wait_for_subscribers([pc_pub, odom_pub])
@@ -123,15 +124,21 @@ def get_args():
     parser.add_argument("--odom_topic", type=str, default="/odom")
     parser.add_argument("--path_topic", type=str, default="/global_path")
     parser.add_argument(
-        "-r", "--rate", type=int, default=1, help="Multiply the publish rate by FACTOR"
+        "-r",
+        "--rate",
+        type=float,
+        default=1.0,
+        help="Multiply the publish rate by FACTOR",
     )
     args = parser.parse_args()
 
     args.dataset_dir = pathlib.Path(args.dataset_dir)
     if args.dataset == "CODa":
         args.pc_dir = args.dataset_dir / "3d_comp_new" / "os1" / f"{args.scene}"
-        args.pose_file = args.dataset_dir / "poses" / "fast-lio" / f"{args.scene}.txt"
         # args.pose_file = args.dataset_dir / "poses" / f"{args.scene}.txt"
+        args.pose_file = (
+            args.dataset_dir / "poses" / "ct-icp_sync" / f"{args.scene}.txt"
+        )
     elif args.dataset == "Wanda":
         args.pc_dir = args.dataset_dir / "3d_comp" / args.scene
         args.pose_file = args.dataset_dir / "poses" / args.scene / "os1.txt"

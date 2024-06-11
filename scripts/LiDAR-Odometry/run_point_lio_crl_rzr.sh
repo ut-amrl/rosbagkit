@@ -1,18 +1,13 @@
 #!/bin/bash
 PROJECT_DIR=$(realpath $(dirname "$0")/../..)
 
-dataset_dir="/home/dongmyeong/Projects/datasets/SARA/wanda"
+dataset_dir="/home/dongmyeong/Projects/datasets/SARA/crl_rzr"
 scenes=(
-  # gq_appld_south_tour_01_2024-03-14-10-08-34
-  gq_appld_wandagq_32_field_foresttrail_06_2024-03-15-11-17-44
-  # gq_appld_wandagq_32_forest_02_2024-03-15-12-02-37
-  # gq_appld_wandagq_32_forest_03_2024-03-15-12-16-36
-  # gq_TN_Menu_A_datacollect_02_2024-02-21-17-23-09
-  # gq_appld_forest_mission_autonomous_deployment_01_2024-03-12-14-15-49
+  gq_TN_e3-baseline_rfv_250_remission_01_2024-02-09-14-39-36
 )
 
-pc_topic="/wanda/lidar_points"
-imu_topic="/wanda/imu/data"
+pc_topic="/crl_rzr/velodyne_front_horiz_points"
+imu_topic="/crl_rzr/imu/data"
 
 # Define the paths to your catkin workspace setup files
 setup_ws1="/home/dongmyeong/Projects/others/Point-LIO/devel/setup.bash"
@@ -44,13 +39,15 @@ sleep 3
 # LiDAR-Inertial Odometry
 for scene in "${scenes[@]}"; do
   # Start Point-LIO
-  ( source $setup_ws1 && exec roslaunch point_lio mapping_wanda.launch rviz:=$rviz --wait ) &
+  ( source $setup_ws1 && exec roslaunch point_lio mapping_crl_rzr.launch rviz:=$rviz --wait ) &
   PID1=$!
 
   # Start odometry_saver
   ( source $setup_ws2 && exec roslaunch odometry_saver point_lio.launch \
-      dataset:=wanda save_pose_only:=true \
-      pose_file:=$dataset_dir/poses/$scene/point_lio.txt --wait) &
+      dataset:=crl_rzr \
+      save_pose_only:=false \
+      pose_file:=$dataset_dir/poses/$scene/point_lio.txt \
+      dst_directory:=$dataset_dir/point-lio_results/$scene --wait ) &
   PID2=$!
 
   # Wait for both background processes to start

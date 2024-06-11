@@ -51,12 +51,12 @@ def get_args():
     args = parser.parse_args()
 
     assert len(args.info_topics) == len(args.outfiles)
-    os.makedirs(os.path.dirname(args.outfiles[0]), exist_ok=True)
-    os.makedirs(os.path.dirname(args.outfiles[1]), exist_ok=True)
     # delete the existing files
     for outfile in args.outfiles:
         if os.path.exists(outfile):
             os.remove(outfile)
+        else:
+            os.makedirs(os.path.dirname(outfile), exist_ok=True)
 
     return args
 

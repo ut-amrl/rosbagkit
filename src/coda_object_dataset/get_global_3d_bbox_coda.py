@@ -71,7 +71,8 @@ def fit_3d_bbox(bboxes):
     """
 
     cX, cY, cZ, l, w, h = np.median(bboxes[:, :6], axis=0)
-    r, p, y = average_rpy(bboxes[:, 6:9])
+    # r, p, y = average_rpy(bboxes[:, 6:9])
+    r, p, y = np.median(bboxes[:, 6:9], axis=0)
 
     return np.array([cX, cY, cZ, l, w, h, r, p, y])
 
@@ -220,19 +221,19 @@ def main(args):
                         for idx in fitted_result["indices"]
                     ],
                 }
-                for fitted_result in fitted_bboxes[class_name]
+                for fitted_result in fitted_bboxes
             ],
         }
 
         # Save the results
-        out_debug_file = args.global_ellipsoid_dir / f"{class_name}_debug.json"
+        out_debug_file = args.global_3d_bbox_dir / f"{class_name}_debug.json"
         with open(out_debug_file, "w") as f:
             json.dump(bboxes_json, f, indent=4)
 
         for instances in bboxes_json["instances"]:
             instances.pop("3d_bboxes")
 
-        out_file = args.global_ellipsoid_dir / f"{class_name}.json"
+        out_file = args.global_3d_bbox_dir / f"{class_name}.json"
         with open(out_file, "w") as f:
             json.dump(bboxes_json, f, indent=4)
 
