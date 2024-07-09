@@ -15,7 +15,7 @@ for scene in "${scenes[@]}"; do
   python $PROJECT_DIR/src/pointcloud_compensation/compensate_pointcloud_bagfile.py \
     --bagfile $dataset_dir/bagfiles/$scene.bag \
     --pc_topic $pc_topic \
-    --dense_posefile $dataset_dir/poses/$scene/point_lio.txt \
+    --ref_posefile $dataset_dir/poses/$scene/fast_lio.txt \
     --out_pc_dir $dataset_dir/3d_comp/$scene \
     --out_timestamps $dataset_dir/timestamps/$scene/3d_comp.txt \
     --out_posefile $dataset_dir/poses/$scene/os1.txt

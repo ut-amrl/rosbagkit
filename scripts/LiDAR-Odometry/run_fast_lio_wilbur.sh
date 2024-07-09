@@ -1,13 +1,13 @@
 #!/bin/bash
 PROJECT_DIR=$(realpath $(dirname "$0")/../..)
 
-dataset_dir="/home/dongmyeong/Projects/datasets/CODa"
-sequences=(10)
-#sequences=(0 1 2 3 4 5 6 7 9 10 11 12 13 16 17 18 19 20 21 22)
+dataset_dir="/home/dongmyeong/Projects/datasets/SARA/wilbur"
+scenes=(
+  mout-forest-loop-1_2024-04-10-10-29-03
+)
 
-pc_frame="os1"
-pc_topic="/ouster_points"
-imu_topic="/imu/data"
+pc_topic="/wilbur/lidar_points_center"
+imu_topic="/wilbur/imu/data"
 
 # Define the paths to your catkin workspace setup files
 setup_ws1="/home/dongmyeong/Projects/others/fast-lio/devel/setup.bash"
@@ -35,40 +35,32 @@ fi
 roscore & PID=$!
 sleep 3
 
-for seq in "${sequences[@]}"; do
+for scene in "${scenes[@]}"; do
   # Start FAST-LIO
-  ( source $setup_ws1 && exec roslaunch fast_lio mapping_coda.launch --wait ) &
+  ( source $setup_ws1 && exec roslaunch fast_lio mapping_wilbur.launch --wait ) &
   PID1=$!
 
   # Start odometry_saver
   ( source $setup_ws2 && exec roslaunch odometry_saver fast_lio.launch \
-      dataset:=coda \
-      save_pose_only:=false \
-      pose_file:=$dataset_dir/poses/fast_lio/$seq.txt \
-      dst_directory:=$dataset_dir/fast-lio_results/$seq --wait ) &
+      dataset:=wilbur \
+      save_pose_only:=true \
+      pose_file:=$dataset_dir/poses/$scene/fast_lio.txt \
+      dst_directory:=$dataset_dir/fast-lio_results/$scene ) &
   PID2=$!
 
   # Wait for both background processes to start
   sleep 3
 
-  # Execute the third command in the foreground
-  python $PROJECT_DIR/src/publish_data/publish_raw_data.py \
-    --dataset CODa --dataset_dir $dataset_dir --scene $seq \
-    --pc_frame $pc_frame --pc_topic $pc_topic --imu_topic $imu_topic &
+  # Start rosbag play
+  rosbag play $dataset_dir/bagfiles/$scene.bag --clock --topic $pc_topic $imu_topic &
   wait $!
 
   echo "Rosbag play finished. Terminating background processes..."
   kill $PID1 $PID2
   wait $PID1 $PID2 2>/dev/null
-
-  # echo "Converting odometry format..."
-  # python $PROJECT_DIR/src/interactive_slam/convert_odom_format.py \
-  #   --odom_dir $dataset_dir/fast_lio_results/$seq \
-  #   --pc_outdir $dataset_dir/3d_comp/$seq \
-  #   --pose_outfile $dataset_dir/poses/os1/$seq.txt \
-  #   --prefix 3d_comp_os1_${seq}_
 done
 echo "All done!"
 
+# Terminate roscore
 kill $PID
 wait $PID 2>/dev/null

@@ -68,15 +68,17 @@ def motion_compensation(pc_msg, pose_interpolator):
     return compensated_pc, pose_interpolator.get_interpolated_pose(scan_ts)
 
 
+def read_messages(bag, topic):
+    """Read messages from the bag file. (to handle large bag files)"""
+    for msg in bag.read_messages(topics=[topic]):
+        yield msg
+
+
 def main(args):
     # Load the point cloud
     print(f"Reading pointclouds from {args.bagfile}...")
     bag = rosbag.Bag(args.bagfile)
-    pc_msgs = sorted(
-        list(bag.read_messages(topics=[args.pc_topic])),
-        key=lambda x: x.message.header.stamp,
-    )
-    print(f" * Loaded {len(pc_msgs)} pointcloud messages")
+    pc_msgs = read_messages(bag, args.pc_topic)
 
     # Load the poses
     ref_poses = np.loadtxt(args.ref_posefile)  # timestamp, x, y, z, qw, qx, qy, qz
@@ -88,7 +90,7 @@ def main(args):
     # Interpolate the poses
     timestamps = []
     poses = []
-    for frame, pc_msg in tqdm(enumerate(pc_msgs), total=len(pc_msgs)):
+    for frame, pc_msg in tqdm(enumerate(pc_msgs)):
         # Motion compensation
         compensated_pc, pose = motion_compensation(pc_msg.message, pose_interpolator)
 

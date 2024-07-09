@@ -17,20 +17,23 @@ from src.utils.lie_math import xyz_quat_to_matrix
 from src.utils.o3d_visualization import create_o3d_grid
 
 
-def accumulate_pointcloud(pc_files, pose_np, blind, skip=30):
+def accumulate_pointcloud(pc_files, pose_np, skip, blind):
     """Accumulate pointclouds based on the poses"""
     accumulated_pc_o3d = o3d.geometry.PointCloud()
     for pose, pc_file in tqdm(
         zip(pose_np[::skip], pc_files[::skip]),
-        total=len(pose_np // skip),
+        total=(len(pose_np) // skip),
         desc="Accumulating Pointclouds",
     ):
-        Hwl = xyz_quat_to_matrix(pose[1:])
+        # load pointcloud
+        # pc_np = np.fromfile(pc_file, dtype=np.float32).reshape(-1, 3)
         pc_np = np.fromfile(pc_file, dtype=np.float32).reshape(-1, 4)[:, :3]
+
         # Remove points within the blind region
         pc_np = pc_np[np.linalg.norm(pc_np, axis=1) > blind]
 
         # Transform the pointcloud to the world frame
+        Hwl = xyz_quat_to_matrix(pose[1:])
         pc_world = pc_np @ Hwl[:3, :3].T + Hwl[:3, 3].T
 
         # Accumulate the pointcloud
@@ -69,7 +72,9 @@ def main(args):
             print(f"Skipping {pc_dir}, {len(pose_np)} != {len(pc_files)}")
             continue
 
-        accumulated_pc_o3d = accumulate_pointcloud(pc_files, pose_np, args.blind)
+        accumulated_pc_o3d = accumulate_pointcloud(
+            pc_files, pose_np, args.skip, args.blind
+        )
 
         if all_accumulated_pc_o3d is None:
             all_accumulated_pc_o3d = accumulated_pc_o3d
@@ -114,7 +119,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="Generate static map")
     # Dataset
     parser.add_argument(
-        "--dataset", type=str, default="CODa", choices=["CODa", "Wanda"]
+        "--dataset", type=str, default="CODa", choices=["CODa", "wanda", "wilbur"]
     )
     parser.add_argument("--dataset_dir", type=str, help="Path to the dataset")
     parser.add_argument("--scenes", type=str, nargs="+", help="Scene names")
@@ -126,6 +131,7 @@ def get_args():
     )
 
     # Options
+    parser.add_argument("--skip", type=int, default=30)
     parser.add_argument("--blind", type=float, default=15.0)
     parser.add_argument("--voxel_size", type=float, default=1.0)
     parser.add_argument("--nb_neighbors", type=int, default=100)
@@ -144,7 +150,15 @@ def get_args():
         args.static_map_file = (
             args.dataset_dir / "static_map" / f"{args.name}.{args.extension}"
         )
-    elif args.dataset == "Wanda":
+    elif args.dataset == "wanda":
+        args.pc_dirs = [args.dataset_dir / "3d_comp" / scene for scene in args.scenes]
+        args.pose_files = [
+            args.dataset_dir / "poses" / scene / "os1.txt" for scene in args.scenes
+        ]
+        args.static_map_file = (
+            args.dataset_dir / "static_map" / f"{args.name}.{args.extension}"
+        )
+    elif args.dataset == "wilbur":
         args.pc_dirs = [args.dataset_dir / "3d_comp" / scene for scene in args.scenes]
         args.pose_files = [
             args.dataset_dir / "poses" / scene / "os1.txt" for scene in args.scenes

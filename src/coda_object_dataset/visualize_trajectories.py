@@ -47,7 +47,8 @@ def plot_trajectories(args):
         ax.plot(
             positions[:, 0],
             positions[:, 1],
-            color=colors[i],
+            # color=colors[i],
+            color="black",
             linewidth=3,
             # label=f"Seq {seq}",
         )
@@ -55,6 +56,9 @@ def plot_trajectories(args):
     # Load and plot the static map
     # pcd = np.asarray(o3d.io.read_point_cloud(args.map_pcd).points)
     # ax.scatter(pcd[:, 0], pcd[:, 1], color="gray", s=1, alpha=0.5, label="Point Cloud")
+
+    train_color = (0, 0, 1)  # Blue for training/validation
+    test_color = (1, 0, 0)  # Red for testing
 
     # Global Annotation
     legend_patches = []
@@ -72,20 +76,42 @@ def plot_trajectories(args):
                     for attr in ["cX", "cY", "cZ", "l", "w", "h", "r", "p", "y"]
                 ]
             )
-            rect = plt.Rectangle(
-                (bbox[0] - bbox[3] / 2, bbox[1] - bbox[4] / 2),
-                bbox[3],
-                bbox[4],
-                linewidth=10,
-                edgecolor=CLASSES[class_id]["color"],
-                facecolor="none",
-            )
+
+            if bbox[0] <= 0 and class_id in ["Tree", "Pole", "Bollard"]:
+                rect = plt.Rectangle(
+                    (bbox[0] - bbox[3] / 2, bbox[1] - bbox[4] / 2),
+                    bbox[3],
+                    bbox[4],
+                    linewidth=10,
+                    edgecolor=train_color,
+                    facecolor="none",
+                )
+            else:
+                rect = plt.Rectangle(
+                    (bbox[0] - bbox[3] / 2, bbox[1] - bbox[4] / 2),
+                    bbox[3],
+                    bbox[4],
+                    linewidth=10,
+                    edgecolor=test_color,
+                    facecolor="none",
+                )
+
             ax.add_patch(rect)
 
-        class_name = class_id.replace("_", " ")
-        legend_patches.append(
-            mpatches.Patch(color=CLASSES[class_id]["color"], label=class_name)
-        )
+            # rect = plt.Rectangle(
+            #     (bbox[0] - bbox[3] / 2, bbox[1] - bbox[4] / 2),
+            #     bbox[3],
+            #     bbox[4],
+            #     linewidth=10,
+            #     edgecolor=CLASSES[class_id]["color"],
+            #     facecolor="none",
+            # )
+            # ax.add_patch(rect)
+
+        # class_name = class_id.replace("_", " ")
+        # legend_patches.append(
+        #     mpatches.Patch(color=CLASSES[class_id]["color"], label=class_name)
+        # )
 
     # Customize plot
     ax.set_xlabel("X (m)", fontsize=25)
@@ -93,8 +119,14 @@ def plot_trajectories(args):
     ax.tick_params(axis="both", which="major", labelsize=25)
     ax.grid(True)
     ax.set_aspect("equal", adjustable="box")
-    ax.legend(handles=legend_patches, fontsize=25)
-
+    # ax.legend(handles=legend_patches, fontsize=25)
+    ax.legend(
+        handles=[
+            plt.Line2D([0], [0], color=train_color, lw=4, label="Train/Val"),
+            plt.Line2D([0], [0], color=test_color, lw=4, label="Test"),
+        ],
+        fontsize=25,
+    )
     plt.show()
 
 

@@ -81,7 +81,10 @@ def visualize_rgbd_image(
     rgb, depth, alpha=0.5, colormap=cv2.COLORMAP_VIRIDIS, outfile=None
 ):
     norm_depth = normalize_colormap(depth, colormap)
-    rgbd_image = cv2.addWeighted(rgb, alpha, norm_depth, 1 - alpha, 0)
+
+    mask = depth > 0
+    rgbd_image = rgb.copy()
+    rgbd_image[mask] = cv2.addWeighted(rgb[mask], alpha, norm_depth[mask], 1 - alpha, 0)
 
     if outfile:
         cv2.imwrite(outfile, rgbd_image)

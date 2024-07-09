@@ -49,7 +49,7 @@ for scene in "${scenes[@]}"; do
 
   # Start odometry_saver
   ( source $setup_ws2 && exec roslaunch odometry_saver point_lio.launch \
-      dataset:=wanda save_pose_only:=false \
+      dataset:=wanda save_pose_only:=true \
       pose_file:=$dataset_dir/poses/$scene/point_lio.txt \
       dst_directory:=$dataset_dir/point-lio_results/$seq --wait ) &
   PID2=$!

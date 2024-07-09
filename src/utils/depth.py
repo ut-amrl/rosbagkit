@@ -112,7 +112,7 @@ def write_depth(depth, filename):
     depth = depth.copy()
 
     # Convert the depth image to millimeters
-    depth[np.isnan(depth) | np.isinf(depth) | (depth < 0)] = 0
+    depth[np.isnan(depth) | np.isinf(depth) | (depth < 0) | (depth > 65.535)] = 0
     depth = np.clip(depth * 1000, 0, 65535).astype(np.uint16)
 
     # Save the depth image
@@ -143,6 +143,6 @@ def show_depth(depth, colormap=cv2.COLORMAP_VIRIDIS):
 
 
 if __name__ == "__main__":
-    filename = "data/SARA/wanda/2d_depth/gq_appld_wandagq_32_field_foresttrail_06_2024-03-15-11-17-44/left/2d_depth_left_0.png"
-    depth = read_depth(filename)
+    depth_file ="data/SARA/wilbur/2d_depth/mout-forest-loop-1_2024-04-10-10-29-03/2d_depth_aux_8547.png"
+    depth = read_depth(depth_file)
     show_depth(depth)

@@ -42,18 +42,14 @@ def main(args):
     print(f"Total {len(pc_files)} pointcloud files")
     assert len(timestamps) == len(pc_files), f"{len(timestamps)} != {len(pc_files)}"
 
-    timestamps = timestamps[len(timestamps) // 2 - 1000 :]
-    pc_files = pc_files[len(pc_files) // 2 - 1000 :]
-    assert len(timestamps) == len(pc_files), f"{len(timestamps)} != {len(pc_files)}"
-
     shared_clock = SharedClock()
 
     clock_thread = threading.Thread(
         target=publish_clock, args=(clock_pub, shared_clock, timestamps, args.rate)
     )
-    # imu_thread = threading.Thread(
-    #     target=publish_imu, args=(imu_pub, imu_data, shared_clock)
-    # )
+    imu_thread = threading.Thread(
+        target=publish_imu, args=(imu_pub, imu_data, shared_clock)
+    )
     pc_thread = threading.Thread(
         target=publish_pointcloud,
         args=(pc_pub, pc_files, timestamps, args.pc_frame, shared_clock, False),
@@ -61,11 +57,11 @@ def main(args):
 
     clock_thread.start()
     pc_thread.start()
-    # imu_thread.start()
+    imu_thread.start()
 
     clock_thread.join()
     pc_thread.join()
-    # imu_thread.join()
+    imu_thread.join()
 
 
 def get_args():
