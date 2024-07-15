@@ -5,7 +5,7 @@ from typing import Dict
 from scipy.spatial.transform import Rotation as R
 
 
-def load_extrinsic_matrix(extrinsic_file: str) -> np.ndarray:
+def load_extrinsics(extrinsic_file: str) -> np.ndarray:
     """
     Load extrinsic matrix from a yaml file.
 
@@ -30,7 +30,7 @@ def load_extrinsic_matrix(extrinsic_file: str) -> np.ndarray:
     return extrinsic_matrix
 
 
-def load_camera_params(intrinsic_file: str) -> Dict[str, np.ndarray]:
+def load_cam_params(intrinsic_file: str) -> Dict[str, np.ndarray]:
     """
     Load camera parameters from a yaml file.
 
@@ -38,9 +38,11 @@ def load_camera_params(intrinsic_file: str) -> Dict[str, np.ndarray]:
         intrinsic_file: Path to the yaml file containing the camera parameters.
     Returns:
         camera_params: Dictionary containing the camera parameters.
+            - img_size: (2,) image size (height, width)
             - K: (3, 3) intrinsic matrix
-            - img_size: (2,) image size
-            - D: (5,) distortion coefficients
+            - D: (4>=,) distortion coefficients
+            - R: (3, 3) rectification matrix
+            - P: (3, 4) projection matrix
     """
     with open(intrinsic_file, "r") as f:
         params = yaml.safe_load(f)

@@ -5,98 +5,99 @@ Description: Generate depth images from stereo images and pointcloud
 """
 
 import os
-import sys
 import argparse
 import pathlib
 from natsort import natsorted
-from collections import deque
-import warnings
-import time
 
 import numpy as np
-from scipy.spatial.transform import Rotation as R
 import cv2
-import matplotlib.pyplot as plt
 
-from src.utils.camera import load_extrinsic_matrix, load_camera_params
-from src.utils.depth import fill_depth_bins, densify_depth_image, save_depth_image
-from src.utils.projection import project_to_image
+from src.utils.camera import load_extrinsics, load_cam_params
+from src.utils.pose_interpolator import PoseInterpolator
 from src.utils.transforms import xyz_quat_to_matrix
-from src.utils.visualization import (
-    visualize_pointcloud,
-    visualize_rgbd_image,
-    visualize_normalized_image,
-    draw_points_on_image,
-)
+
+from utils.depth import project_volume_to_depth
+from utils.misc import alternating_indices
 
 
-def compute_stereo_depth(
-    img_left: np.ndarray,
-    img_right: np.ndarray,
-    pc_world_window: deque[np.ndarray],
-    pose: np.ndarray,  # timestamp, x, y, z, qw, qx, qy, qz
-    data: dict,
-):
-    assert img_left.shape == img_right.shape
-    H, W = img_left.shape[:2]
+def process_frame(idx, data, args, pose_interpolator):
+    img_ts = data["timestamps"][idx]
 
-    # 1. Project the point cloud to the camera
-    H_lw = xyz_quat_to_matrix(pose[1:])
-    H_wl = np.linalg.inv(H_lw)
+    # accumulated compensated pointcloud in the world frame
+    accumulated_pc = []
+    close_pc_idx = np.argmin(np.abs(data["poses"][:, 0] - img_ts))
+    for i in alternating_indices(args.window_size):
+        pc_idx = close_pc_idx + i
+        if pc_idx < 0 or pc_idx >= len(data["pc_files"]):
+            continue
 
-    depth_bins_left = np.full((H, W, 3), np.nan, dtype=np.float32)
-    depth_bins_right = np.full((H, W, 3), np.nan, dtype=np.float32)
+        pc = np.fromfile(data["pc_files"][pc_idx], dtype=np.float32).reshape(-1, 4)
+        pc = pc[:, :3]
+        Hwl = xyz_quat_to_matrix(data["poses"][pc_idx, 1:])
 
-    for pc_world in pc_world_window:
-        pc_img_left, pc_depth_left, valid_left = project_to_image(
-            img_left,
-            pc_world,
-            data["cam_left"]["H_lc"] @ H_wl,  # H_wc = H_lc @ H_wl
-            data["cam_left"]["K"],
-            data["cam_left"]["D"],
-        )
-        pc_img_right, pc_depth_right, valid_right = project_to_image(
-            img_right,
-            pc_world,
-            data["cam_right"]["H_lc"] @ H_wl,  # H_wc = H_lc @ H_wl
-            data["cam_right"]["K"],
-            data["cam_right"]["D"],
-        )
+        pc_world = pc @ Hwl[:3, :3].T + Hwl[:3, 3].T  # Transform (Lidar -> World)
+        accumulated_pc.append(pc_world)
 
-        # Accumulate the depth bins
-        depth_bins_left = fill_depth_bins(depth_bins_left, pc_img_left, pc_depth_left)
-        depth_bins_right = fill_depth_bins(
-            depth_bins_right, pc_img_right, pc_depth_right
-        )
+    # Get the transformation from the world to the rectified image plane
+    Hwl_img = pose_interpolator.get_interpolated_transform(img_ts)
+    rect_left, rect_right = np.eye(4), np.eye(4)
+    rect_left[:3, :3] = data["cam0_params"]["R"]
+    rect_right[:3, :3] = data["cam1_params"]["R"]
+    Hrw_left = rect_left @ data["cam0_extrinsic"] @ np.linalg.inv(Hwl_img)
+    Hrw_right = rect_right @ data["cam1_extrinsic"] @ np.linalg.inv(Hwl_img)
 
-    # 2. Compute the depth map with disparity map
+    # compute the depth image by projecting the pointcloud to the image plane
+    img_left = cv2.imread(data["img_left_files"][idx])
+    img_right = cv2.imread(data["img_right_files"][idx])
 
-    # 3. Densify the depth map with Inverse Depth Fusion
-    densified_depth_left = densify_depth_image(depth_bins_left)
-    densified_depth_right = densify_depth_image(depth_bins_right)
+    depth_left = project_volume_to_depth(
+        img_left,
+        accumulated_pc,
+        Hrw_left,
+        data["cam0_params"]["P"],
+        volume=args.volume,
+        visualize=True,
+    )
+    depth_right = project_volume_to_depth(
+        img_right,
+        accumulated_pc,
+        Hrw_right,
+        data["cam1_params"]["P"],
+        volume=args.volume,
+        visualize=True,
+    )
 
-    return densified_depth_left, densified_depth_right
+
+def main(args):
+    data = load_data(args)
+    pose_interpolator = PoseInterpolator(data["poses"])
+
+    for idx in range(len(data["img_left_files"])):
+        if idx % 100 == 0:
+            process_frame(idx, data, args, pose_interpolator)
 
 
 def load_data(args):
     # Load the point cloud files and poses
-    pc_files = natsorted(list(args.pc_dir.glob("*.bin")))
+    pc_files = list(map(str, natsorted(args.pc_dir.glob("*.bin"))))
     poses = np.loadtxt(args.pose_file)  # timestamp, x, y, z, qw, qx, qy, qz
-    assert len(pc_files) == len(poses)
+    assert len(pc_files) == len(poses), f"{len(pc_files)} != {len(poses)}"
     print(f"Loaded {len(pc_files)} pointclouds and corresponding poses")
 
     # Load the images and timestamps
-    img_left_files = natsorted(list(args.img_left_dir.glob("*.jpg")))
-    img_right_files = natsorted(list(args.img_right_dir.glob("*.jpg")))
+    img_left_files = list(map(str, natsorted(list(args.img_left_dir.glob("*.png")))))
+    img_right_files = list(map(str, natsorted(list(args.img_right_dir.glob("*.png")))))
     timestamps = np.loadtxt(args.timestamps)
     print(f"Loaded {len(img_right_files)} left / right images")
-    assert len(img_left_files) == len(img_right_files) == len(timestamps)
+    assert (
+        len(img_left_files) == len(img_right_files) == len(timestamps)
+    ), f"{len(img_left_files)} != {len(img_right_files)} != {len(timestamps)}"
 
     # Load the calibrations
-    cam_left = load_camera_params(args.cam_left_intrinsics)
-    cam_right = load_camera_params(args.cam_right_intrinsics)
-    cam_left.update({"H_lc": load_extrinsic_matrix(args.cam_left_extrinsic)})
-    cam_right.update({"H_lc": load_extrinsic_matrix(args.cam_right_extrinsic)})
+    cam0_extrinsic = load_extrinsics(args.cam0_extrinsic)
+    cam1_extrinsic = load_extrinsics(args.cam1_extrinsic)
+    cam0_params = load_cam_params(args.cam0_intrinsics)
+    cam1_params = load_cam_params(args.cam1_intrinsics)
 
     data = {
         "pc_files": pc_files,
@@ -104,79 +105,46 @@ def load_data(args):
         "img_left_files": img_left_files,
         "img_right_files": img_right_files,
         "timestamps": timestamps,
-        "cam_left": cam_left,
-        "cam_right": cam_right,
+        "cam0_extrinsic": cam0_extrinsic,
+        "cam1_extrinsic": cam1_extrinsic,
+        "cam0_params": cam0_params,
+        "cam1_params": cam1_params,
     }
     return data
 
 
-def main(args):
-    data = load_data(args)
-
-    # Initialize the point cloud window
-    pc_world_window = deque(maxlen=args.window)
-    last_pc_idx = -1
-
-    for idx, ts in enumerate(data["timestamps"]):
-        img_left = cv2.imread(str(data["img_left_files"][idx]))
-        img_right = cv2.imread(str(data["img_right_files"][idx]))
-
-        # Accumulate the point clouds
-        upper_pc_idx = np.searchsorted(data["poses"][:, 0], ts, side="right")
-        for pc_idx in range(last_pc_idx + 1, upper_pc_idx):
-            print(f"Update the point cloud window with {pc_idx}")
-            pc = np.fromfile(data["pc_files"][pc_idx], dtype=np.float32).reshape(-1, 3)
-            pose = data["poses"][pc_idx]
-            H_lw = xyz_quat_to_matrix(pose[1:])
-
-            # Transform the point cloud to the world frame
-            pc_lidar = np.hstack((pc, np.ones((pc.shape[0], 1))))
-            pc_world = pc_lidar @ H_lw[:3].T  # Nx4 @ 4x3 -> Nx3
-            pc_world_window.append(pc_world)
-        last_pc_idx = upper_pc_idx - 1
-
-        if len(pc_world_window) < args.window:
-            continue
-
-        # Compute the stereo depth with the accumulated point clouds
-        depth_left, depth_right = compute_stereo_depth(
-            img_left,
-            img_right,
-            pc_world_window,
-            data["poses"][last_pc_idx],
-            data,
-        )
-
-        # save the depth images
-        frame = data["img_left_files"][idx].stem.split("_")[-1]
-        left_file = str(args.left_outdir / f"2d_depth_cam0_{args.seq}_{frame}.png")
-        right_file = str(args.right_outdir / f"2d_depth_cam1_{args.seq}_{frame}.png")
-        save_depth_image(depth_left, left_file)
-        save_depth_image(depth_right, right_file)
-
-
 def get_args():
     parser = argparse.ArgumentParser(description="Generate depth images")
-    parser.add_argument("--dataset_dir", type=str, help="Path to the dataset")
-    parser.add_argument("--seq", type=str, help="seq name")
-    parser.add_argument("--window", type=int, default=10, help="window size")
+    parser.add_argument(
+        "--dataset_dir", type=str, default="data/CODa", help="Path to the dataset"
+    )
+    parser.add_argument("--seq", type=str, default="1", help="Sequence number")
+    parser.add_argument(
+        "--window_size", type=int, default=1, help="window size for pc accumulation"
+    )
+    parser.add_argument(
+        "--volume", type=float, default=0.05, help="point volume for depth estimation"
+    )
     args = parser.parse_args()
 
+    # input
     args.dataset_dir = pathlib.Path(args.dataset_dir)
 
     args.pc_dir = args.dataset_dir / "3d_comp" / "os1" / args.seq
-    args.pose_file = args.dataset_dir / "poses" / "os1" / f"{args.seq}.txt"
+    # args.pose_file = args.dataset_dir / "poses" / "os1" / f"{args.seq}.txt"
+    args.pose_file = args.dataset_dir / "correct" / f"{args.seq}.txt"
 
-    args.img_left_dir = args.dataset_dir / "2d_raw" / "cam0" / args.seq
-    args.img_right_dir = args.dataset_dir / "2d_raw" / "cam1" / args.seq
+    args.img_left_dir = args.dataset_dir / "2d_rect" / "cam0" / args.seq
+    args.img_right_dir = args.dataset_dir / "2d_rect" / "cam1" / args.seq
     args.timestamps = args.dataset_dir / "timestamps" / f"{args.seq}.txt"
 
     args.calib_dir = args.dataset_dir / "calibrations" / args.seq
-    args.cam_left_extrinsic = args.calib_dir / "calib_os1_to_cam0.yaml"
-    args.cam_left_intrinsics = args.calib_dir / "calib_cam0_intrinsics.yaml"
-    args.cam_right_extrinsic = args.calib_dir / "calib_os1_to_cam1.yaml"
-    args.cam_right_intrinsics = args.calib_dir / "calib_cam1_intrinsics.yaml"
+    args.cam0_extrinsic = args.calib_dir / "calib_os1_to_cam0.yaml"
+    args.cam1_extrinsic = args.calib_dir / "calib_os1_to_cam1.yaml"
+    args.cam0_intrinsics = args.calib_dir / "calib_cam0_intrinsics.yaml"
+    args.cam1_intrinsics = args.calib_dir / "calib_cam1_intrinsics.yaml"
 
+    # output
     args.left_outdir = args.dataset_dir / "2d_depth" / "cam0" / args.seq
     args.right_outdir = args.dataset_dir / "2d_depth" / "cam1" / args.seq
     args.left_outdir.mkdir(parents=True, exist_ok=True)

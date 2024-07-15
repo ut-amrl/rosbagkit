@@ -1,6 +1,71 @@
 import numpy as np
 import cv2
 
+import matplotlib.pyplot as plt
+
+from src.utils.projection import project_to_rectified
+
+
+def project_volume_to_depth(
+    img: np.ndarray,
+    accumulated_pc: list[np.ndarray],
+    extrinsic: np.ndarray,
+    proj_mat: np.ndarray,
+    volume: float,
+    visualize: bool = False,
+):
+    """Project pointclouds to the image plane and compute the depth image, assuming points with volrme."""
+    assert extrinsic.shape == (4, 4), f"{extrinsic.shape} != (4,4)"
+    assert proj_mat.shape == (3, 4), f"{proj_mat.shape} != (3,4)"
+    imgH, imgW = img.shape[:2]
+    depth = np.zeros((imgH, imgW), dtype=np.float32)
+
+    all_pc_img = []
+    all_pc_depth = []
+
+    # project the pointclouds to the image plane (assume points with volume)
+    for pc in accumulated_pc:
+        # project the pointcloud to the rectified image plane
+        pc_img, pc_depth, _ = project_to_rectified(
+            pc, extrinsic, proj_mat, (imgH, imgW)
+        )
+        all_pc_img.append(pc_img)
+        all_pc_depth.append(pc_depth)
+
+        # sort the points by depth (from near to far)
+        sort_idx = np.argsort(pc_depth)
+
+        # compute the voxel size in the image plane (occlusion-aware depth estimation)
+        dx = proj_mat[0, 0] * volume / pc_depth
+        dy = proj_mat[1, 1] * volume / pc_depth
+
+        for i in sort_idx:
+            min_x = max(0, round(pc_img[i, 0] - dx[i] / 2))
+            min_y = max(0, round(pc_img[i, 1] - dy[i] / 2))
+            max_x = min(imgW, round(pc_img[i, 0] + dx[i] / 2))
+            max_y = min(imgH, round(pc_img[i, 1] + dy[i] / 2))
+
+            # Use broadcasting to efficiently update the depth map
+            mask = depth[min_y:max_y, min_x:max_x] == 0
+            depth[min_y:max_y, min_x:max_x][mask] = pc_depth[i]
+
+    if visualize:
+        fig, ax = plt.subplots(1, 2, figsize=(15, 7))
+
+        ax[0].imshow(img)
+        for pc_img, pc_depth in zip(all_pc_img, all_pc_depth):
+            ax[0].scatter(pc_img[:, 0], pc_img[:, 1], s=1, c=pc_depth, cmap="jet")
+        ax[0].set_xlim(0, imgW)
+        ax[0].set_ylim(imgH, 0)
+        ax[0].set_title("Projected Point Clouds")
+
+        ax[1].imshow(depth, cmap="jet")
+        ax[1].set_title("Depth Image")
+
+        plt.show()
+
+    return depth
+
 
 def fill_depth_bins(depth_bins, pc_img, pc_depths, option="max"):
     """
@@ -140,9 +205,3 @@ def show_depth(depth, colormap=cv2.COLORMAP_VIRIDIS):
     normalized_image = cv2.normalize(depth, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
     cv2.imshow("Depth Image", cv2.applyColorMap(normalized_image, colormap))
     cv2.waitKey(0)
-
-
-if __name__ == "__main__":
-    depth_file ="data/SARA/wilbur/2d_depth/mout-forest-loop-1_2024-04-10-10-29-03/2d_depth_aux_8547.png"
-    depth = read_depth(depth_file)
-    show_depth(depth)
