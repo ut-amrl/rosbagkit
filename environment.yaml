@@ -1,0 +1,19 @@
+name: dataset-tools
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.10
+  - numpy=1.26
+  - rospkg
+  - opencv
+  - empy==3.3.4
+  - scipy
+  - manifpy
+  - tqdm
+  - pyyaml
+  - pycryptodomex
+  - python-gnupg
+  - natsort
+  - matplotlib
