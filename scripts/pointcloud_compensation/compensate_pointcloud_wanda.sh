@@ -1,7 +1,7 @@
 #!/bin/bash
 PROJECT_DIR=$(realpath $(dirname "$0")/../..)
 
-dataset_dir="/home/dongmyeong/Projects/datasets/SARA/wanda"
+DATASET_DIR="/home/dongmyeong/Projects/datasets/SARA/wanda"
 scenes=(
   gq_appld_south_tour_01_2024-03-14-10-08-34
   gq_appld_wandagq_32_field_foresttrail_06_2024-03-15-11-17-44
@@ -18,10 +18,10 @@ trap "echo 'Script interrupted'; exit;" SIGINT
 for scene in "${scenes[@]}"; do
   # Compensate pointcloud
   python $PROJECT_DIR/src/pointcloud_compensation/compensate_pointcloud_bagfile.py \
-    --bagfile $dataset_dir/bagfiles/$scene.bag \
+    --bagfile $DATASET_DIR/bagfiles/$scene.bag \
     --pc_topic $pc_topic \
-    --ref_posefile $dataset_dir/poses/$scene/fast_lio.txt \
-    --out_pc_dir $dataset_dir/3d_comp_new/$scene \
-    --out_timestamps $dataset_dir/timestamps/$scene/os1.txt \
-    --out_posefile $dataset_dir/poses/$scene/os1.txt
+    --ref_posefile $DATASET_DIR/poses/$scene/fast_lio.txt \
+    --out_pc_dir $DATASET_DIR/3d_comp_new/$scene \
+    --out_timestamps $DATASET_DIR/timestamps/$scene/os1.txt \
+    --out_posefile $DATASET_DIR/poses/$scene/os1.txt
 done

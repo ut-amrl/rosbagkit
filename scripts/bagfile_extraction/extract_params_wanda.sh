@@ -1,15 +1,23 @@
 #!/bin/bash
 PROJECT_DIR=$(realpath $(dirname "$0")/../..)
 
+# frames
 os_frame="wanda/center_ouster_link"
 cam_left_frame="wanda/stereo_left_optical_frame"
 cam_right_frame="wanda/stereo_right_optical_frame"
 imu_frame="wanda/imu_link"
 
-cam_left_info="/wanda/stereo_left/camera_info"
-cam_right_info="/wanda/stereo_right/camera_info"
+# topics
+info_topics=(
+  "/wanda/stereo_left/camera_info"
+  "/wanda/stereo_right/camera_info"
+)
+outfiles=(
+  "cam_left_intrinsics.yaml"
+  "cam_right_intrinsics.yaml"
+)
 
-dataset_dir="/home/dongmyeong/Projects/datasets/SARA"
+DATASET_DIR=$PROJECT_DIR/data/SARA/wanda
 scenes=(
   gq_appld_south_tour_01_2024-03-14-10-08-34
   gq_appld_wandagq_32_field_foresttrail_06_2024-03-15-11-17-44
@@ -20,28 +28,32 @@ scenes=(
 
 trap "echo 'Script interrupted'; exit;" SIGINT
 
+# Check if roscore is already running
+if pgrep -x "roscore" > /dev/null; then
+    # Kill existing roscore
+    pkill -f "roscore"
+    sleep 3
+fi
+
+# Start roscore
+roscore & PID1=$!
+sleep 1
+
 for scene in "${scenes[@]}" ; do
-  python $PROJECT_DIR/src/bagfile_extraction/extract_tf.py \
-    --bagfile=$dataset_dir/bagfiles/$scene.bag \
-    --source_frame=$os_frame \
-    --target_frame=$cam_left_frame \
-    --outfile=$dataset_dir/calibrations/$scene/os_to_cam_left.yaml
+  calibrations_dir=$DATASET_DIR/calibrations/$scene
+  full_outfiles=()
+  for outfile in "${outfiles[@]}" ; do
+    full_outfiles+=("$calibrations_dir/$outfile")
+  done
 
   python $PROJECT_DIR/src/bagfile_extraction/extract_tf.py \
-    --bagfile=$dataset_dir/bagfiles/$scene.bag \
-    --source_frame=$os_frame \
-    --target_frame=$cam_right_frame \
-    --outfile=$dataset_dir/calibrations/$scene/os_to_cam_right.yaml
-
-  python $PROJECT_DIR/src/bagfile_extraction/extract_tf.py \
-    --bagfile=$dataset_dir/bagfiles/$scene.bag \
-    --source_frame=$os_frame \
-    --target_frame=$imu_frame \
-    --outfile=$dataset_dir/calibrations/$scene/os_to_imu.yaml
+    --bagfile $DATASET_DIR/bagfiles/$scene.bag \
+    --tf_specs "$os_frame:$cam_left_frame:$calibrations_dir/os_to_cam_left.yaml" \
+               "$os_frame:$cam_right_frame:$calibrations_dir/os_to_cam_right.yaml" \
+               "$os_frame:$imu_frame:$calibrations_dir/os_to_imu.yaml"
 
   python $PROJECT_DIR/src/bagfile_extraction/extract_camera_info.py \
-    --bagfile=$dataset_dir/bagfiles/$scene.bag \
-    --info_topics $cam_left_info $cam_right_info \
-    --outfile $dataset_dir/calibrations/$scene/cam_left_intrinsics.yaml \
-              $dataset_dir/calibrations/$scene/cam_right_intrinsics.yaml
+    --bagfile $DATASET_DIR/bagfiles/$scene.bag \
+    --info_topics ${info_topics[@]} \
+    --outfile ${full_outfiles[@]}
 done

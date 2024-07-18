@@ -1,11 +1,9 @@
 import os
-import pathlib
 import argparse
-from natsort import natsorted
 import numpy as np
 from tqdm import tqdm
 
-from src.utils.camera import load_extrinsic_matrix
+from src.utils.camera import load_extrinsics
 from src.utils.lie_math import matrix_to_xyz_quat
 from src.utils.pose_interpolator import PoseInterpolator
 
@@ -22,7 +20,7 @@ def main(args):
     print(f"Loaded {len(target_timestamps)} timestamps ({args.target_timestamps})")
 
     # Load the extrinsic
-    Hcl = load_extrinsic_matrix(args.extrinsic)  # source: LiDAR, target: camera
+    Hcl = load_extrinsics(args.extrinsic)  # source: LiDAR, target: camera
     Hlc = np.linalg.inv(Hcl)
 
     cam_poses = []

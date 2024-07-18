@@ -75,37 +75,41 @@ def read_messages(bag, topic):
 
 
 def main(args):
-    # Load the point cloud
-    print(f"Reading pointclouds from {args.bagfile}...")
-    bag = rosbag.Bag(args.bagfile)
-    pc_msgs = read_messages(bag, args.pc_topic)
-
     # Load the poses
     ref_poses = np.loadtxt(args.ref_posefile)  # timestamp, x, y, z, qw, qx, qy, qz
-    print(f" * Loaded {len(ref_poses)} LiDAR poses")
+    print(f"Loaded {len(ref_poses)} LiDAR poses")
 
     # Create the pose interpolator
     pose_interpolator = PoseInterpolator(ref_poses)
 
+    # Process the bag file
+    print(f"Processing bagfile: {args.bagfile}...")
+    bag = rosbag.Bag(args.bagfile, "r")
+
     # Interpolate the poses
     timestamps = []
     poses = []
-    for frame, pc_msg in tqdm(enumerate(pc_msgs)):
+    frame = 0
+    for topic, pc_msg, t in tqdm(
+        bag.read_messages(topics=[args.pc_topic]),
+        desc=f"Compensating pointclouds ({args.pc_topic})",
+        total=bag.get_message_count(topic_filters=[args.pc_topic]),
+    ):
         # Motion compensation
-        compensated_pc, pose = motion_compensation(pc_msg.message, pose_interpolator)
+        compensated_pc, pose = motion_compensation(pc_msg, pose_interpolator)
 
         if compensated_pc.shape[0] == 0:
-            warnings.warn(f"Empty pointcloud at {pc_msg.message.header.stamp.to_sec()}")
-            continue
+            warnings.warn(f"Empty pointcloud at {pc_msg.header.stamp.to_sec()}")
 
         # Save the pose at the scan timestamp
-        timestamps.append(pc_msg.message.header.stamp.to_sec())
+        timestamps.append(pc_msg.header.stamp.to_sec())
         poses.append(pose)
-        assert pose[0] == pc_msg.message.header.stamp.to_sec()
 
         # Save the compensated pointcloud
         pc_outfile = args.out_pc_dir / f"3d_comp_os1_{frame}.bin"
         compensated_pc.astype(np.float32).tofile(pc_outfile)
+
+        frame += 1
 
     # Save the poses and timestamps
     np.savetxt(args.out_posefile, poses, fmt="%.6f %.8f %.8f %.8f %.8f %.8f %.8f %.8f")
@@ -129,7 +133,7 @@ def get_args():
     args.out_pc_dir = pathlib.Path(args.out_pc_dir)
     args.out_pc_dir.mkdir(parents=True, exist_ok=True)
     if args.out_timestamps is None:
-        args.out_timestamps = str(args.out_pc_dir / "timestamps.txt")
+        args.out_timestamps = str(args.out_pc_dir / "os1.txt")
     if args.out_posefile is None:
         args.out_posefile = str(args.out_pc_dir / "poses.txt")
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 PROJECT_DIR=$(realpath $(dirname "$0")/../..)
 
-dataset_dir="/home/dongmyeong/Projects/datasets/SARA/wanda"
+DATASET_DIR=$PROJECT_DIR/data/SARA/wanda
 scenes=(
   gq_appld_south_tour_01_2024-03-14-10-08-34
   gq_appld_wandagq_32_field_foresttrail_06_2024-03-15-11-17-44
@@ -11,9 +11,8 @@ scenes=(
   gq_TN_Menu_A_datacollect_02_2024-02-21-17-23-09
 )
 
-# Define the paths to your catkin workspace setup files
-setup_ws1="/home/dongmyeong/Projects/others/fast-lio/devel/setup.bash"
-setup_ws2="/home/dongmyeong/Projects/others/interactive_slam/devel/setup.bash"
+pc_topic="/wanda/lidar_points"
+imu_topic="/wanda/imu/data"
 
 # Function to handle script termination
 cleanup() {
@@ -45,17 +44,16 @@ for scene in "${scenes[@]}"; do
   # Start odometry_saver
   ( source $setup_ws2 && exec roslaunch odometry_saver fast_lio.launch \
       dataset:=wanda \
-      save_pose_only:=false \
-      pose_file:=$dataset_dir/poses/$scene/fast_lio.txt \
-      dst_directory:=$dataset_dir/fast-lio_results/$scene ) &
+      save_pose_only:=true \
+      pose_file:=$DATASET_DIR/poses/$scene/fast_lio.txt \
+      dst_directory:=$DATASET_DIR/fast-lio_results/$scene ) &
   PID2=$!
 
   # Wait for both background processes to start
   sleep 3
 
   # Start rosbag play
-  rosbag play $dataset_dir/bagfiles/$scene.bag \
-    --clock --topic /wanda/lidar_points /wanda/imu/data &
+  rosbag play $DATASET_DIR/bagfiles/$scene.bag --clock --topic $pc_topic $imu_topic &
   wait $!
 
   echo "Rosbag play finished. Terminating background processes..."
@@ -64,9 +62,9 @@ for scene in "${scenes[@]}"; do
 
   # echo "Converting odometry format..."
   # python $PROJECT_DIR/src/interactive_slam/convert_odom_format.py \
-  #   --odom_dir $dataset_dir/fast_lio_results/$scene \
-  #   --pc_outdir $dataset_dir/3d_comp/$scene \
-  #   --pose_outfile $dataset_dir/poses/$scene/os1.txt \
+  #   --odom_dir $DATASET_DIR/fast_lio_results/$scene \
+  #   --pc_outdir $DATASET_DIR/3d_comp/$scene \
+  #   --pose_outfile $DATASET_DIR/poses/$scene/os1.txt \
   #   --prefix 3d_comp_os1_
 done
 echo "All done!"

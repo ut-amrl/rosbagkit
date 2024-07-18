@@ -58,13 +58,13 @@ def main(args):
         source_frame = transform["source_frame"]
         target_frame = transform["target_frame"]
         outfile = transform["outfile"]
-        print(f"Extracting transform from {source_frame} to {target_frame}...")
+        print(f"* Extracting transform from {source_frame} to {target_frame}...")
 
         trans, rot = get_transform(tf_buffer, source_frame, target_frame)
         if trans is not None and rot is not None:
-            print(f"Transform received: {source_frame} -> {target_frame}")
-            print(f"Trans (x, y, z): {trans.x}, {trans.y}, {trans.z}")
-            print(f"Quat (qw, qx, qy, qz): {rot.w}, {rot.x}, {rot.y}, {rot.z}")
+            print(f" - Transform received: {source_frame} -> {target_frame}")
+            print(f" - Trans (x, y, z): {trans.x}, {trans.y}, {trans.z}")
+            print(f" - Quat (qw, qx, qy, qz): {rot.w}, {rot.x}, {rot.y}, {rot.z}")
 
             transformation = np.eye(4)
             transformation[:3, 3] = np.array([trans.x, trans.y, trans.z])
@@ -73,13 +73,12 @@ def main(args):
             ).as_matrix()
 
             save_extrinsic_matrix(transformation, outfile)
-            print(f"Saved extrinsic matrix to {outfile}", end="\n")
+            print(f" - Saved extrinsic matrix to {outfile}", end="\n\n")
 
         if trans is None or rot is None:
-            print(f"Could not find transform from {source_frame} to {target_frame}")
+            print(f"* Could not find transform from {source_frame} to {target_frame}")
             continue
 
-    print("* Finished extracting transforms")
     bag_process.terminate()
 
 

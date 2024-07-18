@@ -1,17 +1,13 @@
 #!/bin/bash
 PROJECT_DIR=$(realpath $(dirname "$0")/../..)
 
-dataset_dir="/home/dongmyeong/Projects/datasets/SARA/wilbur"
+DATASET_DIR=$PROJECT_DIR/data/SARA/wilbur
 scenes=(
   mout-forest-loop-1_2024-04-10-10-29-03
 )
 
 pc_topic="/wilbur/lidar_points_center"
 imu_topic="/wilbur/imu/data"
-
-# Define the paths to your catkin workspace setup files
-setup_ws1="/home/dongmyeong/Projects/others/fast-lio/devel/setup.bash"
-setup_ws2="/home/dongmyeong/Projects/others/interactive_slam/devel/setup.bash"
 
 # Function to handle script termination
 cleanup() {
@@ -37,22 +33,22 @@ sleep 3
 
 for scene in "${scenes[@]}"; do
   # Start FAST-LIO
-  ( source $setup_ws1 && exec roslaunch fast_lio mapping_wilbur.launch --wait ) &
+  ( exec roslaunch fast_lio mapping_wilbur.launch --wait ) &
   PID1=$!
 
   # Start odometry_saver
-  ( source $setup_ws2 && exec roslaunch odometry_saver fast_lio.launch \
+  ( exec roslaunch odometry_saver fast_lio.launch \
       dataset:=wilbur \
       save_pose_only:=true \
-      pose_file:=$dataset_dir/poses/$scene/fast_lio.txt \
-      dst_directory:=$dataset_dir/fast-lio_results/$scene ) &
+      pose_file:=$DATASET_DIR/poses/$scene/fast_lio.txt \
+      dst_directory:=$DATASET_DIR/fast-lio_results/$scene ) &
   PID2=$!
 
   # Wait for both background processes to start
   sleep 3
 
   # Start rosbag play
-  rosbag play $dataset_dir/bagfiles/$scene.bag --clock --topic $pc_topic $imu_topic &
+  rosbag play $DATASET_DIR/bagfiles/$scene.bag --clock --topic $pc_topic $imu_topic &
   wait $!
 
   echo "Rosbag play finished. Terminating background processes..."

@@ -43,8 +43,8 @@ def process_frame(idx, data, args, pose_interpolator):
     rect_left, rect_right = np.eye(4), np.eye(4)
     rect_left[:3, :3] = data["cam0_params"]["R"]
     rect_right[:3, :3] = data["cam1_params"]["R"]
-    Hrw_left = rect_left @ data["cam0_extrinsic"] @ np.linalg.inv(Hwl_img)
-    Hrw_right = rect_right @ data["cam1_extrinsic"] @ np.linalg.inv(Hwl_img)
+    Hiw_left = rect_left @ data["cam0_extrinsic"] @ np.linalg.inv(Hwl_img)
+    Hiw_right = rect_right @ data["cam1_extrinsic"] @ np.linalg.inv(Hwl_img)
 
     # compute the depth image by projecting the pointcloud to the image plane
     img_left = cv2.imread(data["img_left_files"][idx])
@@ -53,7 +53,7 @@ def process_frame(idx, data, args, pose_interpolator):
     depth_left = project_volume_to_depth(
         img_left,
         accumulated_pc,
-        Hrw_left,
+        Hiw_left,
         data["cam0_params"]["P"],
         volume=args.volume,
         visualize=True,
@@ -61,7 +61,7 @@ def process_frame(idx, data, args, pose_interpolator):
     depth_right = project_volume_to_depth(
         img_right,
         accumulated_pc,
-        Hrw_right,
+        Hiw_right,
         data["cam1_params"]["P"],
         volume=args.volume,
         visualize=True,

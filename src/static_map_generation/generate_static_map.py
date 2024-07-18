@@ -17,7 +17,7 @@ from src.utils.lie_math import xyz_quat_to_matrix
 from src.utils.o3d_visualization import create_o3d_grid
 
 
-def accumulate_pointcloud(pc_files, pose_np, skip, blind):
+def accumulate_pointcloud(pc_files, pose_np, skip, blind, pc_size=3):
     """Accumulate pointclouds based on the poses"""
     accumulated_pc_o3d = o3d.geometry.PointCloud()
     for pose, pc_file in tqdm(
@@ -26,8 +26,7 @@ def accumulate_pointcloud(pc_files, pose_np, skip, blind):
         desc="Accumulating Pointclouds",
     ):
         # load pointcloud
-        # pc_np = np.fromfile(pc_file, dtype=np.float32).reshape(-1, 3)
-        pc_np = np.fromfile(pc_file, dtype=np.float32).reshape(-1, 4)[:, :3]
+        pc_np = np.fromfile(pc_file, dtype=np.float32).reshape(-1, pc_size)[:, :3]
 
         # Remove points within the blind region
         pc_np = pc_np[np.linalg.norm(pc_np, axis=1) > blind]
@@ -73,7 +72,7 @@ def main(args):
             continue
 
         accumulated_pc_o3d = accumulate_pointcloud(
-            pc_files, pose_np, args.skip, args.blind
+            pc_files, pose_np, args.skip, args.blind, args.pc_size
         )
 
         if all_accumulated_pc_o3d is None:
@@ -150,6 +149,7 @@ def get_args():
         args.static_map_file = (
             args.dataset_dir / "static_map" / f"{args.name}.{args.extension}"
         )
+        args.pc_size = 4
     elif args.dataset == "wanda":
         args.pc_dirs = [args.dataset_dir / "3d_comp" / scene for scene in args.scenes]
         args.pose_files = [
@@ -158,6 +158,7 @@ def get_args():
         args.static_map_file = (
             args.dataset_dir / "static_map" / f"{args.name}.{args.extension}"
         )
+        args.pc_size = 3
     elif args.dataset == "wilbur":
         args.pc_dirs = [args.dataset_dir / "3d_comp" / scene for scene in args.scenes]
         args.pose_files = [
@@ -166,6 +167,7 @@ def get_args():
         args.static_map_file = (
             args.dataset_dir / "static_map" / f"{args.name}.{args.extension}"
         )
+        args.pc_size = 3
     else:
         raise ValueError(f"Invalid dataset: {args.dataset}")
 

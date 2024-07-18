@@ -45,14 +45,14 @@ def process_frame(idx, data, args, pose_interpolator):
     Hwl = pose_interpolator.get_interpolated_transform(img_ts)
     rect = np.eye(4)
     rect[:3, :3] = data["cam_params"]["R"]  # rectification matrix
-    Hrw = rect @ data["extrinsic"] @ np.linalg.inv(Hwl)  # Hrw = Rect * Hcl * Hlw
+    Hiw = rect @ data["extrinsic"] @ np.linalg.inv(Hwl)  # Hiw = Rect * Hcl * Hlw
 
     # compute the depth image by projecting the pointcloud to the image plane
     img = cv2.imread(str(img_file))
     depth = project_volume_to_depth(
         img,
         accumulated_pc,
-        Hrw,
+        Hiw,
         data["cam_params"]["P"],
         volume=args.volume,
         visualize=False,

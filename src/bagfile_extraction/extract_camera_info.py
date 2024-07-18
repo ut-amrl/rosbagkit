@@ -23,22 +23,22 @@ def save_camera_info(msg, outfile):
 
 
 def main(args):
-    bag = rosbag.Bag(args.bagfile)
-    print(f"* Extracting camera info from bagfile {args.bagfile} ...")
+    print(f"\nExtracting camera info from bagfile {args.bagfile} ...")
 
     topic_to_outfile = dict(zip(args.info_topics, args.outfiles))
 
-    for topic, msg, t in bag.read_messages(topics=args.info_topics):
-        if topic in args.info_topics:
-            save_camera_info(msg, topic_to_outfile[topic])
+    with rosbag.Bag(args.bagfile) as bag:
+        for topic, msg, t in bag.read_messages(topics=args.info_topics):
+            if topic in args.info_topics:
+                save_camera_info(msg, topic_to_outfile[topic])
 
-        # Break if all the outfiles have been written
-        if all(os.path.exists(outfile) for outfile in args.outfiles):
-            break
+            # Break if all the outfiles have been written
+            if all(os.path.exists(outfile) for outfile in args.outfiles):
+                break
 
-    for outfile, info_topic in zip(args.outfiles, args.info_topics):
-        if not os.path.exists(outfile):
-            raise ValueError(f"Could not find {info_topic} message in the bagfile")
+        for outfile, info_topic in zip(args.outfiles, args.info_topics):
+            if not os.path.exists(outfile):
+                raise ValueError(f"Could not find {info_topic} message in the bagfile")
 
     bag.close()
 
