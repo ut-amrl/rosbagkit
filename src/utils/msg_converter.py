@@ -61,7 +61,7 @@ def np_to_pointcloud2(
         "intensity":    (np.float32, PointField.FLOAT32),
         "t":            (np.uint32,  PointField.UINT32),
         "time":         (np.uint32,  PointField.UINT32),
-        "ring":         (np.uint8,   PointField.UINT8),
+        "ring":         (np.uint16,  PointField.UINT16),
         "reflectivity": (np.uint16,  PointField.UINT16),
         "ambient":      (np.uint16,  PointField.UINT16),
         "range":        (np.uint32,  PointField.UINT32),
@@ -121,7 +121,10 @@ def pcd_to_pointcloud2(
     Returns:
         sensor_msgs.msg.PointCloud2 message
     """
-    import open3d
+    try:
+        import open3d
+    except ImportError:
+        raise ImportError("open3d is required to read PCD files")
 
     pcd = open3d.io.read_point_cloud(pcd_file)
     points = np.asarray(pcd.points)
