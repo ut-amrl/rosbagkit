@@ -91,13 +91,13 @@ def load_data(args):
     print(f"pose file: {args.pose_file}")
 
     # Load the images and timestamps (front)
-    img_front_files = natsorted(args.img_front_dir.glob("*.jpg"))
+    img_front_files = natsorted(args.img_front_dir.glob("*.png"))
     img_front_timestamps = np.loadtxt(args.img_front_timestamps)
     assert len(img_front_files) == len(img_front_timestamps)
     print(f"Loaded {len(img_front_files)} images")
 
     # Load the images and timestamps (rear)
-    img_rear_files = natsorted(args.img_rear_dir.glob("*.jpg"))
+    img_rear_files = natsorted(args.img_rear_dir.glob("*.png"))
     img_rear_timestamps = np.loadtxt(args.img_rear_timestamps)
     assert len(img_rear_files) == len(img_rear_timestamps)
     print(f"Loaded {len(img_rear_files)} images")
