@@ -1,7 +1,7 @@
 #!/bin/bash
 DOCKER_IMAGE=domlee93/dataset-tools:latest
-USER=$(whoami)
-DATA_DIR=/media/dongmyeong/T7_Shield/SARA/wilbur
+USER=ut-amrl
+DATA_DIR=/media/dongmyeong/T7_Shield/SARA
 
 xhost +local:
 
@@ -15,6 +15,6 @@ docker run -it --rm \
   --env QT_X11_NO_MITSHM=1 \
   --volume /tmp/.X11-unix:/tmp/.X11-unix:rw \
   -v $(pwd):/home/$USER/dataset-tools \
-  -v $DATA_DIR:/home/$USER/dataset-tools/data/SARA/wilbur \
+  -v $DATA_DIR:/home/$USER/dataset-tools/data/SARA \
   -w /home/$USER/dataset-tools \
   $DOCKER_IMAGE 

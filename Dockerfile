@@ -3,6 +3,7 @@ FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu20.04
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
 ENV ROS_DISTRO=noetic
+ENV USERNAME=ut-amrl
 
 # Install ROS Noetic and necessary tools
 RUN apt-get update && apt-get install -y \
@@ -41,10 +42,19 @@ ENV PATH=/opt/miniforge3/bin:$PATH
 COPY environment.yaml /tmp/environment.yaml
 RUN mamba env create -f /tmp/environment.yaml
 
-# Source ROS and Conda environment automatically when the container starts
-RUN echo "source /opt/ros/noetic/setup.bash" >> /root/.bashrc && \
-    echo "source /opt/miniforge3/bin/activate dataset-tools" >> /root/.bashrc
+# Create a new user with sudo privileges
+RUN useradd -ms /bin/bash $USERNAME && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$USERNAME
 
+# Set up ROS and Conda environment for the new user
+RUN echo "source /opt/ros/noetic/setup.bash" >> /home/$USERNAME/.bashrc && \
+    echo "source /opt/miniforge3/bin/activate dataset-tools" >> /home/$USERNAME/.bashrc
+
+# Copy the updated .bashrc to root
+RUN cp /home/$USERNAME/.bashrc /root/.bashrc
+
+# Change to the new user
+USER $USERNAME
+WORKDIR /home/$USERNAME
 
 # Set the entrypoint to bash to allow interactive use
 ENTRYPOINT ["/bin/bash"]
