@@ -31,8 +31,8 @@ def get_transform(tf_buffer, source_frame, target_frame):
             target_frame, source_frame, rospy.Time(0), rospy.Duration(1.0)
         )
         trans = transform.transform.translation
-        rot = transform.transform.rotation
-        return trans, rot
+        q = transform.transform.rotation
+        return trans, q
     except tf2_ros.LookupException:
         rospy.logwarn(
             f"Transform not found for {rospy.Time(0)}: {source_frame} to {target_frame}"
@@ -60,22 +60,20 @@ def main(args):
         outfile = transform["outfile"]
         print(f"* Extracting transform from {source_frame} to {target_frame}...")
 
-        trans, rot = get_transform(tf_buffer, source_frame, target_frame)
-        if trans is not None and rot is not None:
+        trans, q = get_transform(tf_buffer, source_frame, target_frame)
+        if trans is not None and q is not None:
             print(f" - Transform received: {source_frame} -> {target_frame}")
-            print(f" - Trans (x, y, z): {trans.x}, {trans.y}, {trans.z}")
-            print(f" - Quat (qw, qx, qy, qz): {rot.w}, {rot.x}, {rot.y}, {rot.z}")
+            print(f" - Trans (x, y, z): {trans.x:.6f} {trans.y:.6f} {trans.z:.6f}")
+            print(f" - Quat (qx, qy, qz, qw): {q.x:.6f} {q.y:.6f} {q.z:.6f} {q.w:.6f}")
 
             transformation = np.eye(4)
             transformation[:3, 3] = np.array([trans.x, trans.y, trans.z])
-            transformation[:3, :3] = R.from_quat(
-                [rot.x, rot.y, rot.z, rot.w]
-            ).as_matrix()
+            transformation[:3, :3] = R.from_quat([q.x, q.y, q.z, q.w]).as_matrix()
 
             save_extrinsic_matrix(transformation, outfile)
             print(f" - Saved extrinsic matrix to {outfile}", end="\n\n")
 
-        if trans is None or rot is None:
+        if trans is None or q is None:
             print(f"* Could not find transform from {source_frame} to {target_frame}")
             continue
 

@@ -1,13 +1,15 @@
 #!/bin/bash
 PROJECT_DIR=$(realpath $(dirname "$0")/../..)
 
-DATASET_DIR=$PROJECT_DIR/data/CODa
-sequences=(7 9 10 11 12 13 16 17)
-#sequences=(0 1 2 3 4 5 6 7 9 10 11 12 13 16 17 18 19 20 21 22)
+ROBOT="trevor"
+DATASET_DIR=$PROJECT_DIR/data/SARA/$ROBOT
 
-pc_frame="os1"
-pc_topic="/ouster_points"
-imu_topic="/imu/data"
+scenes=(
+  2024-07-18-18-40-08
+)
+
+pc_topic=/$ROBOT/lidar_points_center
+imu_topic=/$ROBOT/imu/data
 
 # Function to handle script termination
 cleanup() {
@@ -31,25 +33,24 @@ fi
 roscore & PID=$!
 sleep 3
 
-for seq in "${sequences[@]}"; do
+for scene in "${scenes[@]}"; do
   # Start FAST-LIO
-  ( exec roslaunch fast_lio mapping_coda.launch --wait ) &
+  ( exec roslaunch fast_lio mapping_${ROBOT}.launch --wait ) &
   PID1=$!
 
   # Start odometry_saver
   ( exec roslaunch odometry_saver fast_lio.launch \
-      dataset:=coda \
+      dataset:=$ROBOT \
       save_pose_only:=true \
-      pose_file:=$DATASET_DIR/poses/fast_lio/$seq.txt --wait ) &
+      pose_file:=$DATASET_DIR/poses/$scene/fast_lio.txt \
+      dst_directory:=$DATASET_DIR/fast-lio_results/$scene ) &
   PID2=$!
 
   # Wait for both background processes to start
   sleep 3
 
-  # Execute the third command in the foreground
-  python $PROJECT_DIR/src/publish_data/publish_raw_data.py \
-    --dataset CODa --dataset_dir $DATASET_DIR --scene $seq \
-    --pc_frame $pc_frame --pc_topic $pc_topic --imu_topic $imu_topic &
+  # Start rosbag play
+  rosbag play $DATASET_DIR/bagfiles/$scene.bag --clock --topic $pc_topic $imu_topic &
   wait $!
 
   echo "Rosbag play finished. Terminating background processes..."
@@ -58,5 +59,6 @@ for seq in "${sequences[@]}"; do
 done
 echo "All done!"
 
+# Terminate roscore
 kill $PID
 wait $PID 2>/dev/null

@@ -28,7 +28,9 @@ from src.utils.ros_utils import wait_for_subscribers
 
 
 def main(args):
-    print(f"Publishing compensated data for {args.scene} scene of {args.dataset}...")
+    print(f"Publishing compensated data...")
+    print(f"PC Dir: {args.pc_dir}")
+    print(f"Pose File: {args.pose_file}")
 
     rospy.set_param("use_sim_time", True)
     rospy.init_node("CODa_compenstaed_data_publisher", anonymous=True)
@@ -41,10 +43,10 @@ def main(args):
 
     # Load Pose & Timestamp
     pose_np = np.loadtxt(args.pose_file)[:, :8]
-    pc_files = natsorted(args.pc_dir.glob("*.bin"))
+    pc_files = natsorted(pathlib.Path(args.pc_dir).rglob("*.bin"))
     pc_timestamps = pose_np[:, 0]
     assert len(pose_np) == len(pc_files), f"{len(pose_np)} != {len(pc_files)}"
-    print(f"Total {len(pose_np)} pose data loaded from {args.pose_file}")
+    print(f"Total {len(pose_np)} pose and pc loaded")
 
     # Start-up delay
     wait_for_subscribers([pc_pub, odom_pub])
@@ -69,6 +71,7 @@ def main(args):
             args.pc_frame,
             shared_clock,
             True,
+            args.pc_size,
             args.blind,
         ),
     )
@@ -106,18 +109,11 @@ def main(args):
 
 def get_args():
     parser = argparse.ArgumentParser(description="Publish compensated data")
-    parser.add_argument(
-        "--dataset", type=str, default="CODa", choices=["CODa", "Wanda"], help="Dataset"
-    )
-    parser.add_argument(
-        "--dataset_dir",
-        type=str,
-        default="/home/dongmyeong/Projects/datasets/CODa",
-        help="Path to the dataset",
-    )
-    parser.add_argument("--scene", type=str, help="Scene name")
-    parser.add_argument("--blind", type=float, default=0.0, help="Blind range")
+    parser.add_argument("--pc_dir", type=str, help="Path to the point cloud directory")
+    parser.add_argument("--pose_file", type=str, help="Path to the pose file")
+    parser.add_argument("--pc_size", type=int, default=3, help="Point cloud size")
 
+    parser.add_argument("--blind", type=float, default=0.0, help="Blind range")
     parser.add_argument("--origin_frame", type=str, default="map")
     parser.add_argument("--pc_frame", type=str, default="os1")
     parser.add_argument("--pc_topic", type=str, default="/ouster_points")
@@ -131,19 +127,6 @@ def get_args():
         help="Multiply the publish rate by FACTOR",
     )
     args = parser.parse_args()
-
-    args.dataset_dir = pathlib.Path(args.dataset_dir)
-    if args.dataset == "CODa":
-        args.pc_dir = args.dataset_dir / "3d_comp_new" / "os1" / f"{args.scene}"
-        # args.pose_file = args.dataset_dir / "poses" / f"{args.scene}.txt"
-        args.pose_file = (
-            args.dataset_dir / "poses" / "ct-icp_sync" / f"{args.scene}.txt"
-        )
-    elif args.dataset == "Wanda":
-        args.pc_dir = args.dataset_dir / "3d_comp" / args.scene
-        args.pose_file = args.dataset_dir / "poses" / args.scene / "os1.txt"
-    else:
-        raise NotImplementedError(f"{args.dataset} is not implemented")
 
     return args
 

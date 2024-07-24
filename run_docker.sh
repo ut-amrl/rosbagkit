@@ -3,11 +3,12 @@ DOCKER_IMAGE=domlee93/dataset-tools:latest
 USER=$(whoami)
 DATA_DIR=/media/dongmyeong/T7_Shield/SARA/wilbur
 
-xhost +local:root
+xhost +local:
 
 # Run the Docker container with X11 forwarding enabled
 docker run -it --rm \
   --gpus all \
+  --user $USER \
   --network host \
   --privileged \
   --env DISPLAY=$DISPLAY \

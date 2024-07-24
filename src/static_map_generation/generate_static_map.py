@@ -117,9 +117,7 @@ def main(args):
 def get_args():
     parser = argparse.ArgumentParser(description="Generate static map")
     # Dataset
-    parser.add_argument(
-        "--dataset", type=str, default="CODa", choices=["CODa", "wanda", "wilbur"]
-    )
+    parser.add_argument("--dataset", type=str, default="CODa", choices=["CODa", "SARA"])
     parser.add_argument("--dataset_dir", type=str, help="Path to the dataset")
     parser.add_argument("--scenes", type=str, nargs="+", help="Scene names")
 
@@ -150,16 +148,7 @@ def get_args():
             args.dataset_dir / "static_map" / f"{args.name}.{args.extension}"
         )
         args.pc_size = 4
-    elif args.dataset == "wanda":
-        args.pc_dirs = [args.dataset_dir / "3d_comp" / scene for scene in args.scenes]
-        args.pose_files = [
-            args.dataset_dir / "poses" / scene / "os1.txt" for scene in args.scenes
-        ]
-        args.static_map_file = (
-            args.dataset_dir / "static_map" / f"{args.name}.{args.extension}"
-        )
-        args.pc_size = 3
-    elif args.dataset == "wilbur":
+    elif args.dataset == "SARA":
         args.pc_dirs = [args.dataset_dir / "3d_comp" / scene for scene in args.scenes]
         args.pose_files = [
             args.dataset_dir / "poses" / scene / "os1.txt" for scene in args.scenes

@@ -50,3 +50,7 @@
 5. Get camera pose based on image timestamps
    - Input: LiDAR trajectory, LiDAR-Camera extrinsic, timestamps
    - Example: `./scripts/sync_cam_poses/sync_cam_pose_wilbur.sh`
+
+6. Generate Static Map
+   - Input: LiDAR trajectory, Compensated Pointcloud
+   - Example: `scripts/static_map_generation/generate_static_map_warthog.sh`

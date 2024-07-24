@@ -68,7 +68,7 @@ def publish_imu(imu_pub, imu_data, shared_clock):
 
 
 def publish_pointcloud(
-    pc_pub, pc_files, timestamps, frame_id, shared_clock, compensated=False, blind=0.0
+    pc_pub, pc_files, timestamps, frame_id, shared_clock, compensated=False, pc_size=3, blind=0.0,
 ):
     assert len(pc_files) == len(timestamps)
 
@@ -88,26 +88,26 @@ def publish_pointcloud(
                 )
                 ts = rospy.Time.from_sec(timestamps[pc_last_idx])
                 if compensated:
-                    # TODO: check pointcloud format (x, y, z)
-                    pc_np = np.fromfile(pc_file, dtype=np.float32).reshape(-1, 3)
+                    pc_np = np.fromfile(pc_file, dtype=np.float32).reshape(-1, pc_size)
 
                     # filter out points with range less than blind
                     valid = np.linalg.norm(pc_np[:, :2], axis=1) > blind
                     pc_np = pc_np[valid]
 
                     # add intensity placeholder
-                    pc_np = np.hstack(
-                        (pc_np, np.zeros((len(pc_np), 1), dtype=np.float32))
-                    )
+                    if pc_size == 3:
+                        pc_np = np.hstack(
+                            (pc_np, np.zeros((len(pc_np), 1), dtype=np.float32))
+                        )
                     pc_msg = np_to_pointcloud2(pc_np, "x y z intensity", frame_id, ts)
                 else:
-                    pc_msg = process_pointcloud(pc_file, dt * 1e9, frame_id, ts)
+                    pc_msg = process_raw_pointcloud(pc_file, dt * 1e9, frame_id, ts)
                 pc_pub.publish(pc_msg)
                 pc_last_idx += 1
         time.sleep(0.001)
 
 
-def process_pointcloud(bin_path, dt, frame_id, timestamp):
+def process_raw_pointcloud(bin_path, dt, frame_id, timestamp):
     """simulate raw pointcloud data from a binary file"""
     N_HORIZON = 1024
     N_RING = 128

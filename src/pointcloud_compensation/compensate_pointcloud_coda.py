@@ -74,10 +74,9 @@ def main(args):
             if idx + 1 < len(timestamps)
             else timestamps[idx] - timestamps[idx - 1]
         )
-        compensated_pc, pose = motion_compensation(
+        compensated_pc, poses[idx] = motion_compensation(
             pc_files[idx], ts, dt, pose_interpolator
         )
-        poses[idx] = pose
 
         # Save the compensated pointcloud
         pc_outfile = args.out_dir / f"3d_comp_os1_{args.seq}_{idx}.bin"

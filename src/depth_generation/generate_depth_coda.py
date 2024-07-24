@@ -16,8 +16,7 @@ from src.utils.camera import load_extrinsics, load_cam_params
 from src.utils.pose_interpolator import PoseInterpolator
 from src.utils.transforms import xyz_quat_to_matrix
 
-from utils.depth import project_volume_to_depth
-from utils.misc import alternating_indices
+from common import alternating_indices, project_volume_to_depth
 
 
 def process_frame(idx, data, args, pose_interpolator):

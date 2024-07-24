@@ -15,7 +15,7 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 
-from src.utils.camera import load_extrinsic_matrix, load_camera_params
+from src.utils.camera import load_extrinsics, load_cam_params
 from src.utils.projection import project_to_rectified, project_to_image
 from src.utils.pose_interpolator import PoseInterpolator
 from src.utils.extrinsic_calibrator import ExtrinsicCalibrator
@@ -97,19 +97,19 @@ def main(args):
     print(f"Loaded {len(pc_files)} pointclouds and poses")
 
     # Load the images and timestamps
-    img_files = natsorted(args.img_dir.glob("*.png"))
+    img_files = natsorted(args.img_dir.glob("*.jpg"))
     img_times = np.loadtxt(args.img_times)
     assert len(img_files) == len(img_times), f"{len(img_files)} != {len(img_times)}"
     print(f"Loaded {len(img_files)} images and timestamps")
 
     # Load the calibrations
-    extrinsic = load_extrinsic_matrix(args.cam_extrinsics)
-    cam_params = load_camera_params(args.cam_intrinsics)
+    extrinsic = load_extrinsics(args.cam_extrinsics)
+    cam_params = load_cam_params(args.cam_intrinsics)
 
     # Interpolate the LiDAR poses to the image timestamps
     pose_interpolator = PoseInterpolator(poses)
 
-    idx = 7900
+    idx = 1000
     offset_tuner = OffsetTuner()
 
     for img_file, img_ts in zip(img_files[idx:], img_times[idx:]):
@@ -124,8 +124,8 @@ def main(args):
             if pc_idx < 0 or pc_idx >= len(pc_files):
                 continue
 
-            pc = np.fromfile(str(pc_files[pc_idx]), dtype=np.float32).reshape(-1, 4)
-            pc = pc[:, :3]
+            pc = np.fromfile(str(pc_files[pc_idx]), dtype=np.float32).reshape(-1, 3)
+            # pc = pc[:, :3]
             hwl = xyz_quat_to_matrix(poses[pc_idx, 1:])
 
             # pc_world = pc @ hwl[:3, :3].T + hwl[:3, 3].T
@@ -191,7 +191,9 @@ def main(args):
 
 def get_args():
     parser = argparse.ArgumentParser(description="Visualize projected pointcloud")
-    parser.add_argument("--dataset", type=str, choices=["CODa", "wanda", "wilbur"])
+    parser.add_argument(
+        "--dataset", type=str, choices=["CODa", "wanda", "wilbur", "trevor"]
+    )
     parser.add_argument("--dataset_dir", type=str, help="Path to the dataset")
     parser.add_argument("--scene", type=str, help="Scene name")
     parser.add_argument(
@@ -225,6 +227,16 @@ def get_args():
         args.calib_dir = args.dataset_dir / "calibrations" / args.scene
         args.cam_intrinsics = args.calib_dir / "cam_aux_intrinsics.yaml"
         args.cam_extrinsics = args.calib_dir / "os_to_cam_aux.yaml"
+    elif args.dataset == "warthog":
+        args.pc_dir = args.dataset_dir / "3d_comp" / args.scene
+        args.pose_file = args.dataset_dir / "poses" / args.scene / "os1.txt"
+        args.img_dir = args.dataset_dir / "2d_rect" / args.scene / "front"
+        args.img_times = (
+            args.dataset_dir / "timestamps" / args.scene / "img_aux_front.txt"
+        )
+        args.calib_dir = args.dataset_dir / "calibrations" / args.scene
+        args.cam_intrinsics = args.calib_dir / "cam_aux_front_intrinsics.yaml"
+        args.cam_extrinsics = args.calib_dir / "os_to_cam_aux_front.yaml"
     else:
         raise ValueError("Invalid dataset")
 

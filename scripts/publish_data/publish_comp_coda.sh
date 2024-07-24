@@ -1,16 +1,15 @@
 #!/bin/bash
 PROJECT_DIR=$(realpath $(dirname "$0")/../..)
 
-dataset_dir="/home/dongmyeong/Projects/datasets/CODa"
-sequences=(3)
+DATASET_DIR=$PROJECT_DIR/data/CODa
+sequences=(7 9 10 11 12 13 16 17)
 
 origin_frame="map"
 pc_frame="os1"
 pc_topic="/compensated_points"
 odom_topic="/odom"
 blind=3.0
-
-setup_ws1="/home/dongmyeong/Projects/others/interactive_slam/devel/setup.bash"
+pc_size=3
 
 cleanup() {
   echo "Terminating background processes..."
@@ -34,9 +33,10 @@ sleep 3
 
 for seq in "${sequences[@]}"; do
   # Start odometry_saver
-  ( source $setup_ws1 && exec roslaunch odometry_saver online.launch \
-    dataset:=coda save_pose_only:=false \
-    dst_directory:=$dataset_dir/interactive_slam/$seq  \
+  ( exec roslaunch odometry_saver online.launch \
+    dataset:=coda \
+    save_pose_only:=false \
+    dst_directory:=$DATASET_DIR/interactive_slam/$seq  \
     points_topic:=$pc_topic odom_topic:=$odom_topic \
     endpoint_frame:=$pc_frame origin_frame:=$origin_frame) &
   PID1=$!
@@ -45,7 +45,9 @@ for seq in "${sequences[@]}"; do
 
   # Publish compensated pointcloud and odometry
   python $PROJECT_DIR/src/publish_data/publish_compensated_data.py \
-    --dataset CODa --dataset_dir $dataset_dir --scene $seq --blind $blind \
+    --pc_dir $DATASET_DIR/3d_comp/os1/$seq \
+    --pose_file $DATASET_DIR/poses/fast_lio_sync/$seq.txt \
+    --pc_size $pc_size --blind $blind \
     --origin_frame $origin_frame --pc_frame $pc_frame \
     --pc_topic $pc_topic --odom_topic $odom_topic -r 5 &
   wait $!

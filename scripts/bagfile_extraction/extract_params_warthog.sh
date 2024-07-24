@@ -1,23 +1,28 @@
 #!/bin/bash
 PROJECT_DIR=$(realpath $(dirname "$0")/../..)
 
-DATASET_DIR=$PROJECT_DIR/data/SARA/wilbur
+ROBOT="trevor"
+DATASET_DIR=$PROJECT_DIR/data/SARA/$ROBOT
 scenes=(
-  mout-forest-loop-1_2024-04-10-10-29-03
+  2024-07-18-18-40-08
 )
 
 # frames
-os_frame="wilbur/ouster_center_link"
-cam_aux_frame="wilbur/multisense_forward/aux_camera_optical_frame"
-imu_frame="wilbur/imu_link"
+os_frame=$ROBOT/ouster_center_link
+cam_aux_front_frame=$ROBOT/multisense_forward/aux_camera_optical_frame
+cam_aux_rear_frame=$ROBOT/multisense_rear/aux_camera_optical_frame
+imu_frame=$ROBOT/imu_link
 
 # topics
 info_topics=(
-  "/wilbur/multisense_forward/aux/image_rect_color/camera_info"
+  /$ROBOT/multisense_forward/aux/image_rect_color/camera_info
+  /$ROBOT/multisense_rear/aux/image_rect_color/camera_info
 )
 outfiles=(
-  "cam_aux_intrinsics.yaml"
+  "cam_aux_front_intrinsics.yaml"
+  "cam_aux_rear_intrinsics.yaml"
 )
+
 
 trap "echo 'Script interrupted'; exit;" SIGINT
 
@@ -41,7 +46,8 @@ for scene in "${scenes[@]}" ; do
 
     python $PROJECT_DIR/src/bagfile_extraction/extract_tf.py \
     --bagfile $DATASET_DIR/bagfiles/$scene.bag \
-    --tf_specs "$os_frame:$cam_aux_frame:$calibrations_dir/os_to_cam_aux.yaml" \
+    --tf_specs "$os_frame:$cam_aux_front_frame:$calibrations_dir/os_to_cam_aux_front.yaml" \
+               "$os_frame:$cam_aux_rear_frame:$calibrations_dir/os_to_cam_aux_rear.yaml" \
                "$os_frame:$imu_frame:$calibrations_dir/os_to_imu.yaml" \
 
     python $PROJECT_DIR/src/bagfile_extraction/extract_camera_info.py \
