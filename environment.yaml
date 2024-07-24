@@ -10,6 +10,8 @@ dependencies:
   - opencv
   - empy==3.3.4
   - scipy
+  - open3d
+  - scikit-learn
   - manifpy
   - tqdm
   - pyyaml
@@ -17,4 +19,3 @@ dependencies:
   - python-gnupg
   - natsort
   - matplotlib
-  - open3d
