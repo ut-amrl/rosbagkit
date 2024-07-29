@@ -13,24 +13,29 @@ def main(args):
     ref_poses = np.loadtxt(args.ref_pose_file)  # timestamp, x, y, z, qw, qx, qy, qz
     print(f"Loaded {len(ref_poses)} poses ({args.ref_pose_file})")
 
-    pose_interpolator = PoseInterpolator(ref_poses)
-
     # Load the target timestamps
     target_timestamps = np.loadtxt(args.target_timestamps)
     print(f"Loaded {len(target_timestamps)} timestamps ({args.target_timestamps})")
 
-    # Load the extrinsic
-    Hcl = load_extrinsics(args.extrinsic)  # source: LiDAR, target: camera
-    Hlc = np.linalg.inv(Hcl)
+    # Create the pose interpolator
+    pose_interpolator = PoseInterpolator(ref_poses)
 
-    cam_poses = []
+    # Load the extrinsic
+    if args.extrinsic:
+        Hcl = load_extrinsics(args.extrinsic)  # source: LiDAR, target: camera
+        Hlc = np.linalg.inv(Hcl)
+        print(f"Loaded the extrinsic calibration matrix ({args.extrinsic})")
+    else:
+        Hlc = np.eye(4)
+
+    sync_poses = []
     for ts in tqdm(target_timestamps):
         Hwl = pose_interpolator.get_interpolated_transform(ts)
-        cam_poses.append([ts, *matrix_to_xyz_quat(Hwl @ Hlc)])
+        sync_poses.append([ts, *matrix_to_xyz_quat(Hwl @ Hlc)])
 
     np.savetxt(
         args.out_pose_file,
-        cam_poses,
+        sync_poses,
         fmt="%.6f %.8f %.8f %.8f %.8f %.8f %.8f %.8f",
     )
 
@@ -39,10 +44,10 @@ def main(args):
 
 def get_args():
     parser = argparse.ArgumentParser(description="Synchronize camera pose")
-    parser.add_argument("--ref_pose_file", type=str)
-    parser.add_argument("--target_timestamps", type=str)
-    parser.add_argument("--extrinsic", type=str)
-    parser.add_argument("--out_pose_file", type=str)
+    parser.add_argument("--ref_pose_file", type=str, required=True)
+    parser.add_argument("--target_timestamps", type=str, required=True)
+    parser.add_argument("--extrinsic", type=str, default=None)
+    parser.add_argument("--out_pose_file", type=str, required=True)
     args = parser.parse_args()
 
     os.makedirs(os.path.dirname(args.out_pose_file), exist_ok=True)
