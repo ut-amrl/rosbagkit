@@ -1,0 +1,12 @@
+[project]
+name = "dataset-tools"
+version = "0.1.0"
+description = "dataset-tools"
+readme = "README.md"
+
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

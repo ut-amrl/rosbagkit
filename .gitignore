@@ -411,3 +411,4 @@ CATKIN_IGNORE
 data
 *.jpg
 *.png
+src_bkp/
