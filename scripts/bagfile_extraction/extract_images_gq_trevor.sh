@@ -1,9 +1,9 @@
 #!/bin/bash
 PROJECT_DIR=$(realpath $(dirname "$0")/../..)
 
-ROBOT=trevor
-DATASET_DIR=$PROJECT_DIR/data/IRIS/$ROBOT
-TIME_RANGE_FILE=$DATASET_DIR/extract_time_range.txt
+BAGFILE_PATH=/robodata/ARL_SARA/GQ-dataset/bagfiles
+OUTPUT_PATH=/robodata/dlee/Datasets/IRIS
+TIME_RANGE_FILE=$OUTPUT_PATH/extract_time_range.txt
 
 scenes=(
   # 2024-08-12-11-32-46
@@ -19,15 +19,15 @@ scenes=(
   # 2024-08-13-11-28-57
   # 2024-08-13-11-34-23
   # 2024-08-13-11-37-53
-  2024-08-13-11-48-00
+  # 2024-08-13-11-48-00
   # 2024-08-13-11-59-52
   # 2024-08-13-12-05-41
   # 2024-08-13-12-13-51
-  2024-08-13-15-28-36
+  # 2024-08-13-15-28-36
   # 2024-08-13-15-39-15
   # 2024-08-13-16-20-38
   # 2024-08-13-16-27-54
-  # 2024-08-13-16-36-24
+  2024-08-13-16-36-24
   # 2024-08-13-16-41-44
   # 2024-08-13-16-45-06
   # 2024-08-13-16-48-47
@@ -51,12 +51,10 @@ scenes=(
 )
 
 # topics
-img_left_topic=/$ROBOT/stereo_left/image_rect_color/compressed
-img_right_topic=/$ROBOT/stereo_right/image_rect_color/compressed
-img_front_topic=/$ROBOT/multisense_forward/aux/image_rect_color
-img_rear_topic=/$ROBOT/multisense_rear/aux/image_rect_color
-# depth_front_topic=/$ROBOT/multisense_forward/depth
-# depth_rear_topic=/$ROBOT/multisense_rear/depth
+img_left_topic=/trevor/stereo_left/image_rect_color/compressed
+img_right_topic=/trevor/stereo_right/image_rect_color/compressed
+img_front_topic=/trevor/multisense_forward/aux/image_rect_color
+img_rear_topic=/trevor/multisense_rear/aux/image_rect_color
 
 get_time_args() {
   local scene=$1
@@ -99,19 +97,19 @@ for scene in "${scenes[@]}" ; do
   fi
 
   # Extract images
-  # python $PROJECT_DIR/scripts/bagfile_extraction/extract_images.py \
-  #   --bagfile $DATASET_DIR/bagfiles/$scene.bag \
-  #   --img_topics $img_right_topic \
-  #   --img_outdirs $DATASET_DIR/2d_rect/cam_right/$scene \
-  #   --ts_outfiles $DATASET_DIR/timestamps/$scene/cam_right.txt \
-  #   --prefixs 2d_rect_right_ \
-  #   $time_args
+  python $PROJECT_DIR/scripts/bagfile_extraction/extract_images.py \
+    --bagfile $BAGFILE_PATH/$scene.bag \
+    --img_topics $img_right_topic \
+    --img_outdirs $OUTPUT_PATH/2d_rect/cam_right/$scene \
+    --ts_outfiles $OUTPUT_PATH/timestamps/$scene/cam_right.txt \
+    --prefixs 2d_rect_right_ \
+    $time_args
 
   python $PROJECT_DIR/scripts/bagfile_extraction/extract_images.py \
-    --bagfile $DATASET_DIR/bagfiles/$scene.bag \
+    --bagfile $BAGFILE_PATH/$scene.bag \
     --img_topics $img_front_topic \
-    --img_outdirs $DATASET_DIR/2d_rect/cam_front/$scene \
-    --ts_outfiles $DATASET_DIR/timestamps/$scene/cam_front.txt \
+    --img_outdirs $OUTPUT_PATH/2d_rect/cam_front/$scene \
+    --ts_outfiles $OUTPUT_PATH/timestamps/$scene/cam_front.txt \
     --prefixs 2d_rect_front_ \
     $time_args
 done
