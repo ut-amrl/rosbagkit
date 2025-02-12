@@ -43,35 +43,43 @@ def load_cam_params(intrinsic_file: str) -> Dict[str, np.ndarray]:
             - R: (3, 3) rectification matrix
             - P: (3, 4) projection matrix
     """
+    cam_params = {}
+
     with open(intrinsic_file, "r") as f:
         params = yaml.safe_load(f)
 
         if "image_width" in params.keys() and "image_height" in params.keys():
             image_size = np.array([params["image_height"], params["image_width"]])
+            cam_params.update({"img_size": image_size})
         elif "width" in params.keys() and "height" in params.keys():
             image_size = np.array([params["height"], params["width"]])
+            cam_params.update({"img_size": image_size})
 
-        intrinsic_matrix = np.array(params["camera_matrix"]["data"]).reshape(
-            params["camera_matrix"]["rows"],
-            params["camera_matrix"]["cols"],
-        )  # (3, 3)
+        if "camera_matrix" in params.keys():
+            intrinsic_matrix = np.array(params["camera_matrix"]["data"]).reshape(
+                params["camera_matrix"]["rows"],
+                params["camera_matrix"]["cols"],
+            )
+            cam_params.update({"K": intrinsic_matrix})
 
-        distortion_coeffs = np.array(params["distortion_coefficients"]["data"])  # (5,)
+        if "distortion_coefficients" in params.keys():
+            distortion_coeffs = np.array(params["distortion_coefficients"]["data"])
+            cam_params.update({"D": distortion_coeffs})
 
-        rectification_matrix = np.array(params["rectification_matrix"]["data"]).reshape(
-            params["rectification_matrix"]["rows"],
-            params["rectification_matrix"]["cols"],
-        )  # (3, 3)
+        if "rectification_matrix" in params.keys():
+            rectification_matrix = np.array(
+                params["rectification_matrix"]["data"]
+            ).reshape(
+                params["rectification_matrix"]["rows"],
+                params["rectification_matrix"]["cols"],
+            )
+            cam_params.update({"R": rectification_matrix})
 
-        projection_matrix = np.array(params["projection_matrix"]["data"]).reshape(
-            params["projection_matrix"]["rows"],
-            params["projection_matrix"]["cols"],
-        )  # (3, 4)
+        if "projection_matrix" in params.keys():
+            projection_matrix = np.array(params["projection_matrix"]["data"]).reshape(
+                params["projection_matrix"]["rows"],
+                params["projection_matrix"]["cols"],
+            )
+            cam_params.update({"P": projection_matrix})
 
-    return {
-        "img_size": image_size,
-        "K": intrinsic_matrix,
-        "D": distortion_coeffs,
-        "R": rectification_matrix,
-        "P": projection_matrix,
-    }
+    return cam_params

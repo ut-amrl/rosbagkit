@@ -3,6 +3,7 @@ from loguru import logger
 import pathlib
 from tqdm import tqdm
 
+# https://gitlab.com/ternaris/rosbags
 from rosbags.highlevel import AnyReader
 
 
@@ -23,15 +24,17 @@ def read_bagfile(
 
     with AnyReader([bagfile]) as reader:
         connections = [c for c in reader.connections if c.topic in topics]
+        available_topics = {c.topic for c in connections}
+        missing_topics = set(topics) - available_topics
 
-        if set(topics) != set(c.topic for c in connections):
-            logger.warning(
-                f"Topics not found: {set(topics) - set(c.topic for c in connections)}"
-            )
-            logger.info(f"Available topics: {set(c.topic for c in reader.connections)}")
+        if not missing_topics and available_topics:
+            logger.success(f"Found all topics: {topics}")
+        elif not connections:
+            logger.error(f"Topics not found: {topics}")
             return topics_to_msgs
-
-        logger.success(f"Found all topics: {topics}")
+        else:
+            logger.warning(f"Missing topics: {missing_topics}")
+            logger.info(f"Available topics: {available_topics}")
 
         # Iterate over the messages
         for connection, timestamp, data in tqdm(
@@ -42,9 +45,8 @@ def read_bagfile(
                 msg = reader.deserialize(data, connection.msgtype)
                 topics_to_msgs[connection.topic].append((ts_sec, msg))
 
-    ## Sort the messages by timestamp
-    topics_to_msgs = {
-        topic: sorted(msgs, key=lambda x: x[0])
-        for topic, msgs in topics_to_msgs.items()
-    }
+    ## Sort the messages by timestamp for each topic
+    for msgs in topics_to_msgs.values():
+        msgs.sort(key=lambda x: x[0])
+
     return topics_to_msgs

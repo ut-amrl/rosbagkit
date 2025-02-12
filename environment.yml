@@ -2,16 +2,17 @@ name: dataset-tools
 channels:
   - conda-forge
 dependencies:
-  - python=3.10
-  - numpy
+  - python=3.11
+  - manifpy
   - opencv
+  - numpy<2
   - scipy
   - open3d
   - scikit-learn
-  - manifpy
-  - tqdm
   - pyyaml
-  - natsort
   - matplotlib
   - pandas
+  - natsort
   - rosbags
+  - loguru
+  - tqdm

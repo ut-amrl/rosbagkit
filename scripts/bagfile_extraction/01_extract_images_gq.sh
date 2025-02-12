@@ -10,7 +10,13 @@ TIME_RANGE_FILE=$OUTPUT_PATH/extract_time_range.txt
 IMG_LEFT_TOPIC=/trevor/stereo_left/image_rect_color/compressed
 IMG_RIGHT_TOPIC=/trevor/stereo_right/image_rect_color/compressed
 IMG_FORWARD_TOPIC=/trevor/multisense_forward/aux/image_rect_color
+IMG_FORWARD_LEFT_TOPIC=/trevor/multisense_forward/left/image_rect
+IMG_FORWARD_RIGHT_TOPIC=/trevor/multisense_forward/right/image_rect
 IMG_REAR_TOPIC=/trevor/multisense_rear/aux/image_rect_color
+IMG_REAR_LEFT_TOPIC=/trevor/multisense_rear/left/image_rect
+IMG_REAR_RIGHT_TOPIC=/trevor/multisense_rear/right/image_rect
+DEPTH_FORWARD_TOPIC=/trevor/multisense_forward/depth
+DEPTH_REAR_TOPIC=/trevor/multisense_rear/depth
 
 scenes=(
   2024-08-12-11-32-46
@@ -102,29 +108,41 @@ for scene in "${scenes[@]}" ; do
   img_topics=(
     "$IMG_LEFT_TOPIC"
     "$IMG_RIGHT_TOPIC"
-    "$IMG_FORWARD_TOPIC"
-    "$IMG_REAR_TOPIC"
+    # "$IMG_FORWARD_TOPIC"
+    # "$IMG_FORWARD_LEFT_TOPIC"
+    # "$IMG_FORWARD_RIGHT_TOPIC"
+    # "$IMG_REAR_TOPIC"
+    # "$DEPTH_FORWARD_TOPIC"
   )
 
   img_outdirs=(
-    "$OUTPUT_PATH/2d_rect/$scene/cam_left"
-    "$OUTPUT_PATH/2d_rect/$scene/cam_right"
-    "$OUTPUT_PATH/2d_rect/$scene/cam_forward"
-    "$OUTPUT_PATH/2d_rect/$scene/cam_rear"
+    "$OUTPUT_PATH/2d_raw/$scene/cam_left"
+    "$OUTPUT_PATH/2d_raw/$scene/cam_right"
+    # "$OUTPUT_PATH/2d_raw/$scene/cam_forward"
+    # "$OUTPUT_PATH/2d_raw/$scene/cam_forward_left"
+    # "$OUTPUT_PATH/2d_raw/$scene/cam_forward_right"
+    # "$OUTPUT_PATH/2d_raw/$scene/cam_rear"
+    # "$OUTPUT_PATH/2d_depth/$scene/multisense_forward"
   )
 
   ts_outfiles=(
-    "$OUTPUT_PATH/2d_rect/$scene/times_left.txt"
-    "$OUTPUT_PATH/2d_rect/$scene/times_right.txt"
-    "$OUTPUT_PATH/2d_rect/$scene/times_forward.txt"
-    "$OUTPUT_PATH/2d_rect/$scene/times_rear.txt"
+    "$OUTPUT_PATH/2d_raw/$scene/timestamp_left.txt"
+    "$OUTPUT_PATH/2d_raw/$scene/timestamp_right.txt"
+    # "$OUTPUT_PATH/2d_raw/$scene/timestamp_forward.txt"
+    # "$OUTPUT_PATH/2d_raw/$scene/timestamp_forward_left.txt"
+    # "$OUTPUT_PATH/2d_raw/$scene/timestamp_forward_right.txt"
+    # "$OUTPUT_PATH/2d_raw/$scene/timestamp_rear.txt"
+    # "$OUTPUT_PATH/2d_depth/$scene/timestamp_multisense_forward.txt"
   )
 
   prefixs=(
-    "2d_rect_left_"
-    "2d_rect_right_"
-    "2d_rect_forward_"
-    "2d_rect_rear_"
+    "2d_raw_left_"
+    "2d_raw_right_"
+    # "2d_raw_forward_"
+    # "2d_raw_forward_left_"
+    # "2d_raw_forward_right_"
+    # "2d_raw_rear_"
+    # "2d_depth_forward_"
   )
 
   # Extract images

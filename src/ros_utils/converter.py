@@ -1,3 +1,5 @@
+from loguru import logger
+
 import numpy as np
 import cv2
 
@@ -16,6 +18,18 @@ def read_image_msg(msg: sensor_msgs.msg.Image) -> np.ndarray:
         image = np_arr.reshape(msg.height, msg.width, -1)
 
     return image
+
+
+def read_depth_msg(msg: sensor_msgs.msg.Image) -> np.ndarray:
+    # https://docs.carnegierobotics.com/S27/api.html#api:camera:depth
+    np_arr = np.frombuffer(msg.data, np.float32)
+
+    if hasattr(msg, "format") and "compressed" in msg.format:
+        depth = cv2.imdecode(np_arr, cv2.IMREAD_UNCHANGED)
+    else:
+        depth = np_arr.reshape(msg.height, msg.width)
+
+    return depth
 
 
 def transform_to_matrix(transform_msg: geometry_msgs.msg.Transform) -> np.ndarray:

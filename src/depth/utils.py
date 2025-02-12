@@ -1,3 +1,5 @@
+from loguru import logger
+
 import numpy as np
 import cv2
 
@@ -34,12 +36,45 @@ def load_depth(filename):
     return depth
 
 
-def show_depth(depth, colormap=cv2.COLORMAP_VIRIDIS):
+def visualize_depth(depth, colormap=cv2.COLORMAP_TURBO, path=""):
     assert depth.ndim == 2, f"{depth.shape} != (H, W)"
 
     if depth.dtype not in [np.float32, np.float64]:
         depth = depth.astype(np.float32)
 
-    normalized_image = cv2.normalize(depth, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
-    cv2.imshow("Depth Image", cv2.applyColorMap(normalized_image, colormap))
-    cv2.waitKey(0)
+    nonzero_mask = depth > 0
+
+    # Initialize the color_depth image with zeros (black)
+    color_depth = np.zeros((depth.shape[0], depth.shape[1], 3), dtype=np.uint8)
+
+    if np.any(nonzero_mask):
+        # Replace zero depth values with a small epsilon to prevent division by zero
+        # Not strictly necessary here since we're masking, but good practice
+        epsilon = 1e-6
+        depth_safe = np.where(nonzero_mask, depth, epsilon)
+
+        # Compute inverse depth
+        inverse_depth = 1.0 / depth_safe
+
+        # Define visualization range for inverse depth
+        # Adjust these values based on your specific depth range and requirements
+        max_invdepth_vizu = min(inverse_depth.max(), 1 / 0.1)  # min: 0.1m
+        min_invdepth_vizu = max(inverse_depth.min(), 1 / 65)  # max: 65m
+        inverse_depth_normalized = (inverse_depth - min_invdepth_vizu) / (
+            max_invdepth_vizu - min_invdepth_vizu
+        )
+
+
+        # Apply the colormap to the normalized inverse depth
+        colored_inv_depth = cv2.applyColorMap(
+            (inverse_depth_normalized * 255).astype(np.uint8), colormap
+        )
+
+        # Assign the colored inverse depth to the color_depth image using the mask
+        color_depth[nonzero_mask] = colored_inv_depth[nonzero_mask]
+
+    if path:
+        cv2.imwrite(path, color_depth)
+    else:
+        cv2.imshow("Depth Image", color_depth)
+        cv2.waitKey(0)

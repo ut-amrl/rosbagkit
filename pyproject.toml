@@ -1,7 +1,7 @@
 [project]
-name = "dataset-tools"
+name = "GQ-devkit"
 version = "0.1.0"
-description = "dataset-tools"
+description = "devkit for GQ dataset"
 readme = "README.md"
 
 [build-system]
