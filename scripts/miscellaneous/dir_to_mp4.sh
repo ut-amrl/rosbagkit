@@ -1,7 +1,6 @@
 #!/bin/bash
-
-PROJECT_DIR=$(realpath $(dirname "$0")/../..)
-DATASET_PATH=/robodata/dlee/Datasets/GQ-dataset
+input_dir=/home/dlee/Projects/GQ-devkit/data/GQ-dataset/2d_raw
+output_dir=/home/dlee/Projects/GQ-devkit/data/GQ-dataset/2d_raw_video
 
 scenes=(
   2024-08-12-11-32-46
@@ -48,17 +47,10 @@ scenes=(
   2024-08-15-13-59-13
 )
 
-
-trap "echo 'Script interrupted'; exit;" SIGINT
-
-
-for scene in "${scenes[@]}" ; do
-  python "$PROJECT_DIR/scripts/rectification/rectify_stereo.py" \
-    --image_path $DATASET_PATH/2d_raw/$scene \
-    --output_path $DATASET_PATH/2d_rect/$scene \
-    --left_calib $DATASET_PATH/calibrations/cam_left_intrinsics.yaml \
-    --right_calib $DATASET_PATH/calibrations/cam_right_intrinsics.yaml \
-    --left_timestamps $DATASET_PATH/2d_raw/$scene/timestamp_cam_left.txt \
-    --right_timestamps $DATASET_PATH/2d_raw/$scene/timestamp_cam_right.txt \
-    --extrinsics $DATASET_PATH/calibrations/cam_left_to_right.yaml
+for scene in "${scenes[@]}"; do
+  framerate=30
+  input_file="$input_dir/$scene/cam_left/*.png"
+  output_file="$output_dir/$scene.mp4"
+  ffmpeg -framerate $framerate -pattern_type glob -i "$input_file" \
+         -c:v libx264 -pix_fmt yuv420p "$output_file"
 done

@@ -14,6 +14,9 @@ def read_bagfile(
     end_time: float = float("inf"),
 ) -> dict[str, list[tuple[float, object]]]:
     """Read messages from a ROS bagfile."""
+    if end_time < 0:
+        end_time = float("inf")
+
     ## Initialize the dictionary to store messages
     topics_to_msgs = {topic: [] for topic in topics}  # list of tuples (timestamp, data)
 
@@ -31,18 +34,20 @@ def read_bagfile(
             logger.success(f"Found all topics: {topics}")
         elif not connections:
             logger.error(f"Topics not found: {topics}")
+            logger.debug(f"included topics: {[c.topic for c in reader.connections]}")
             return topics_to_msgs
         else:
             logger.warning(f"Missing topics: {missing_topics}")
-            logger.info(f"Available topics: {available_topics}")
+            logger.info(f"Found topics: {available_topics}")
+            logger.debug(f"included topics: {[c.topic for c in reader.connections]}")
 
         # Iterate over the messages
-        for connection, timestamp, data in tqdm(
+        for connection, timestamp, rawdata in tqdm(
             reader.messages(connections=connections), desc="Reading messages"
         ):
             ts_sec = timestamp * 1e-9  # Convert nanoseconds to seconds
             if start_time <= ts_sec <= end_time:
-                msg = reader.deserialize(data, connection.msgtype)
+                msg = reader.deserialize(rawdata, connection.msgtype)
                 topics_to_msgs[connection.topic].append((ts_sec, msg))
 
     ## Sort the messages by timestamp for each topic
