@@ -35,6 +35,7 @@ def extract_tf(bagfile: str, source_frame: str, target_frame: str, outfile: str)
         "target_frame": target_frame,
         "translation": T[:3, 3].tolist(),
         "rotation": T[:3, :3].flatten().tolist(),
+        "transformation": T.flatten().tolist(),
     }
 
     logger.info(f"[FOUND] Transformation from {source_frame} to {target_frame}:\n{T}")
@@ -57,15 +58,15 @@ def build_tf_map(tf_msgs):
 
 
 def find_chain(tf_map, source_frame, target_frame):
-    def _search(current, target, visited):
-        if current == target:
+    def _search(source, target, visited):
+        if source == target:
             return np.eye(4)
-        visited.add(current)
-        for (parent, child), tf_matrix in tf_map.items():
-            if parent == current and child not in visited:
-                result = _search(child, target, visited)
-                if result is not None:
-                    return tf_matrix @ result
+        visited.add(source)
+        for (parent, child), T_p_c in tf_map.items():
+            if child == source and parent not in visited:
+                T_t_p = _search(parent, target, visited)
+                if T_t_p is not None:
+                    return T_t_p @ T_p_c
         return None
 
     return _search(source_frame, target_frame, visited=set())
@@ -73,13 +74,12 @@ def find_chain(tf_map, source_frame, target_frame):
 
 def transform_to_matrix(msg) -> np.ndarray:
     """Convert geometry_msgs/Transform into a 4x4 transformation matrix."""
-    tx, ty, tz = (msg.translation.x, msg.translation.y, msg.translation.z)
-    qx, qy, qz, qw = (msg.rotation.x, msg.rotation.y, msg.rotation.z, msg.rotation.w)
-    rotation_matrix = R.from_quat([qx, qy, qz, qw]).as_matrix()
+    p = msg.translation
+    q = msg.rotation
 
     transformation_matrix = np.eye(4)
-    transformation_matrix[:3, :3] = rotation_matrix
-    transformation_matrix[:3, 3] = [tx, ty, tz]
+    transformation_matrix[:3, :3] = R.from_quat([q.x, q.y, q.z, q.w]).as_matrix()
+    transformation_matrix[:3, 3] = [p.x, p.y, p.z]
 
     return transformation_matrix
 
