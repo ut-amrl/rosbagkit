@@ -1,8 +1,19 @@
 [project]
-name = "GQ-devkit"
+name = "rosbagkit"
 version = "0.1.0"
-description = "devkit for GQ dataset"
-readme = "README.md"
+description = "Toolkit for processing ROS bagfiles"
+readme = {file = "README.md", content-type = "text/markdown"}
+requires-python = ">=3.12"
+license = {text = "MIT"}
+dependencies = [
+    "rosbags",
+    "opencv-python",
+    "numpy",
+    "pandas",
+    "pyyaml",
+    "scipy",
+    "tqdm",
+]
 
 [build-system]
 requires = ["setuptools>=42", "wheel"]
@@ -10,3 +21,17 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+
+[project.optional-dependencies]
+dev = ["ruff"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.format]
+line-ending = "lf"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

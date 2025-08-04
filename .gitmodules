@@ -1,9 +1,0 @@
-[submodule "third_party/FAST_LIO"]
-	path = third_party/FAST_LIO
-	url = git@github.com:ut-amrl/FAST_LIO
-[submodule "third_party/odometry_saver"]
-	path = third_party/odometry_saver
-	url = git@github.com:ut-amrl/odometry_saver
-[submodule "third_party/livox_ros_driver"]
-	path = third_party/livox_ros_driver
-	url = git@github.com:Livox-SDK/livox_ros_driver.git
