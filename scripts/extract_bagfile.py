@@ -1,5 +1,6 @@
 import argparse
 import logging
+from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
@@ -18,7 +19,7 @@ from rosbagkit.conversions.motion import (
     read_twist_stamped_msg,
 )
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -35,17 +36,23 @@ def extract_bagfile(config: dict):
     bagfile_root = Path(config["bagfile_root"])
     output_root = Path(config["output_root"])
     topics_info = config["topics"]
-    bag_list = config["bag_list"]
+    scene_info = config["scenes"]
 
-    for idx, bag_info in enumerate(bag_list):
-        bagfile = bagfile_root / bag_info["file"]
-        logger.info(f"[EXTRACT] [{idx + 1}/{len(bag_list)}] {bagfile}")
+    for idx, (scene_name, scene_cfg) in enumerate(scene_info.items()):
+        logger.info(f"[EXTRACT] [{idx + 1}/{len(scene_info)}] {scene_name}")
 
-        output_dir = output_root / bag_info["name"]
+        output_dir = output_root / scene_name
 
-        topics_to_msgs = read_bagfile(
-            bagfile, list(topics_info.keys()), bag_info.get("start", 0), bag_info.get("end", -1)
-        )
+        bagfiles = scene_cfg.get("bagfiles", [])
+        start = scene_cfg.get("start", 0)
+        end = scene_cfg.get("end", -1)
+
+        topics_to_msgs = defaultdict(list)
+        for bagfile in tqdm(bagfiles):
+            bagfile_path = bagfile_root / bagfile
+            tmp_topics_to_msgs = read_bagfile(bagfile_path, list(topics_info.keys()), start, end)
+            for topic, msgs in tmp_topics_to_msgs.items():
+                topics_to_msgs[topic].extend(msgs)
 
         for topic, topic_cfg in topics_info.items():
             msgs = topics_to_msgs.get(topic)
@@ -78,16 +85,17 @@ def process_topic_msgs(topic_cfg: dict, msgs: list[tuple[float, object]], output
 
 
 def process_csv_msgs(msgs: list[tuple[float, object]], outfile: Path):
+    msg_type = msgs[0][1].__class__.__name__ if msgs else None
+    reader_fn = MSG_READERS.get(msg_type)
+    if reader_fn is None:
+        logger.warning(f"Unsupported message type {msg_type}. {outfile}")
+        return
+
     records = []
     for ts, msg in tqdm(msgs, leave=False, dynamic_ncols=True):
         if hasattr(msg, "header") and ts < 1e-3:
             logger.warning(f"Invalid timestamp {ts} for message {msg}")
             continue
-
-        msg_type = msg.__class__.__name__
-        reader_fn = MSG_READERS.get(msg_type)
-        if reader_fn is None:
-            raise NotImplementedError(f"Unsupported message type {msg_type}")
 
         try:
             row = reader_fn(msg)
@@ -144,7 +152,7 @@ def process_image_msgs(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Extract data from ROS bagfiles.")
-    parser.add_argument("--config", type=str, default="config/extract/jackal_ahg_courtyard.yaml")
+    parser.add_argument("--config", type=str, default="config/extract/arl_bluebonnet.yaml")
     args = parser.parse_args()
 
     with open(args.config) as f:
