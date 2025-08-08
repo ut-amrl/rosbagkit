@@ -222,8 +222,6 @@ scenes:
 
   gupta_2023-09-14-11-12-19:
     bagfiles:
-      - bags/gupta_2023-09-14-11-12-19/gps.npy
-      - bags/gupta_2023-09-14-11-12-19/gupta.txt
       - bags/gupta_2023-09-14-11-12-19/gupta_0.bag
       - bags/gupta_2023-09-14-11-12-19/gupta_1.bag
       - bags/gupta_2023-09-14-11-12-19/gupta_2.bag
@@ -235,26 +233,20 @@ scenes:
 
   gupta_2023-09-14-14-18-15:
     bagfiles:
-      - bags/gupta_2023-09-14-14-18-15/gps.npy
       - bags/gupta_2023-09-14-14-18-15/gupta_0.bag
 
   gupta_skydio_2023-09-14-11-03-09:
     bagfiles:
-      - bags/gupta_skydio_2023-09-14-11-03-09/gps.npy
       - bags/gupta_skydio_2023-09-14-11-03-09/gupta_skydio_0.bag
       - bags/gupta_skydio_2023-09-14-11-03-09/gupta_skydio_1.bag
       - bags/gupta_skydio_2023-09-14-11-03-09/gupta_skydio_2.bag
 
   gupta_warehouse_2023-09-13-19-12-49:
     bagfiles:
-      - bags/gupta_warehouse_2023-09-13-19-12-49/gps.npy
-      - bags/gupta_warehouse_2023-09-13-19-12-49/gupta_warehouse.txt
       - bags/gupta_warehouse_2023-09-13-19-12-49/gupta_warehouse_0.bag
 
   meadow_turnpike_2023-09-14-13-35-35:
     bagfiles:
-      - bags/meadow_turnpike_2023-09-14-13-35-35/gps.npy
-      - bags/meadow_turnpike_2023-09-14-13-35-35/meadow_turnpike.txt
       - bags/meadow_turnpike_2023-09-14-13-35-35/meadow_turnpike_0.bag
       - bags/meadow_turnpike_2023-09-14-13-35-35/meadow_turnpike_1.bag
       - bags/meadow_turnpike_2023-09-14-13-35-35/meadow_turnpike_2.bag
