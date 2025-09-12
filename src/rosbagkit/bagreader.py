@@ -40,9 +40,16 @@ def read_bagfile(
             logger.debug(f"[TOPICS] All available: {[c.topic for c in reader.connections]}")
 
         for connection, timestamp, rawdata in tqdm(reader.messages(connections=connections)):
-            ts_sec = timestamp * 1e-9  # Convert nanoseconds to seconds
+            msg = reader.deserialize(rawdata, connection.msgtype)
+
+            # Use the message header timestamp if available
+            header = getattr(msg, "header", None)
+            if header and hasattr(header, "stamp"):
+                ts_sec = header.stamp.sec + header.stamp.nanosec * 1e-9
+            else:
+                ts_sec = timestamp * 1e-9
+
             if start_time <= ts_sec <= end_time:
-                msg = reader.deserialize(rawdata, connection.msgtype)
                 topics_to_msgs[connection.topic].append((ts_sec, msg))
 
     # Sort the messages by timestamp for each topic
