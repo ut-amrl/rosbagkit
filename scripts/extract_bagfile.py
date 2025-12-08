@@ -15,11 +15,12 @@ from rosbagkit.conversions.image import read_image_msg, save_image
 from rosbagkit.conversions.motion import (
     read_imu_msg,
     read_odometry_msg,
+    read_pose_with_covariance_stamped_msg,
     read_twist_msg,
     read_twist_stamped_msg,
 )
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
@@ -29,6 +30,7 @@ MSG_READERS = {
     "nav_msgs__msg__Odometry": read_odometry_msg,
     "geometry_msgs__msg__Twist": read_twist_msg,
     "geometry_msgs__msg__TwistStamped": read_twist_stamped_msg,
+    "geometry_msgs__msg__PoseWithCovarianceStamped": read_pose_with_covariance_stamped_msg,
 }
 
 
@@ -152,7 +154,7 @@ def process_image_msgs(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Extract data from ROS bagfiles.")
-    parser.add_argument("--config", type=str, default="config/extract/arl_bluebonnet.yaml")
+    parser.add_argument("config", type=str, default="config/extract/arl_bluebonnet.yaml")
     args = parser.parse_args()
 
     with open(args.config) as f:

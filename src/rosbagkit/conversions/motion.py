@@ -55,3 +55,16 @@ def read_imu_msg(msg) -> dict:
         "wy": msg.angular_velocity.y,
         "wz": msg.angular_velocity.z,
     }
+
+
+def read_pose_with_covariance_stamped_msg(msg) -> dict:
+    """geometry_msgs/PoseWithCovarianceStamped"""
+    return {
+        "x": msg.pose.pose.position.x,
+        "y": msg.pose.pose.position.y,
+        "z": msg.pose.pose.position.z,
+        "qx": msg.pose.pose.orientation.x,
+        "qy": msg.pose.pose.orientation.y,
+        "qz": msg.pose.pose.orientation.z,
+        "qw": msg.pose.pose.orientation.w,
+    }
