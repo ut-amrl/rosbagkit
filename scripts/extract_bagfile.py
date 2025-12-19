@@ -141,6 +141,10 @@ def process_image_msgs(
 
         try:
             image = read_fn(msg)
+            if image is None:
+                logger.warning(f"Empty image for message {msg}")
+                continue
+
             save_fn(image, outfile)
         except Exception as e:
             logger.warning(f"Failed to process/save image {outfile}: {e}")

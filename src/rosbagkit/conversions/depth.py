@@ -16,6 +16,9 @@ def read_depth_msg(msg) -> np.ndarray:
     Returns:
         np.ndarray: Depth image in meters (float32)
     """
+    if msg.data is None or len(msg.data) == 0:
+        return None
+
     if hasattr(msg, "format") and "compressed" in msg.format.lower():
         np_arr = np.frombuffer(msg.data, np.uint8)
         img = cv2.imdecode(np_arr, cv2.IMREAD_UNCHANGED)
