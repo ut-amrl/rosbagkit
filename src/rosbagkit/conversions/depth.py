@@ -44,6 +44,83 @@ def read_depth_msg(msg) -> np.ndarray:
         raise ValueError(f"Unsupported depth encoding: {msg.encoding}")
 
 
+def read_pointcloud_depth_msg(msg, width=None, height=None, P=None, **kwargs) -> np.ndarray:
+    """Extract a depth image (in meters) from a PointCloud2 message."""
+    # Check if the cloud is ordered (Height> 1 implies 2D structure)
+    if msg.height <= 1:
+        if width is None or height is None or P is None:
+            logger.error("Unordered cloud detected but missing intrinsics (width/height/P)!")
+            return None
+        return project_unordered_cloud(msg, width, height, P)
+
+    try:
+        # We assume standard float32 (4 bytes) and rely on msg.point_step
+        raw_data = np.frombuffer(msg.data, dtype=np.uint8)
+        reshaped = raw_data.reshape(msg.height, msg.width, msg.point_step)
+        z_offset = next(f.offset for f in msg.fields if f.name == "z")
+        z_bytes = reshaped[:, :, z_offset : z_offset + 4]
+        # Cast to float32 (meters) and Copy to ensure contiguous memory for OpenCV
+        depth_img = z_bytes.view(dtype=np.float32).reshape(msg.height, msg.width).copy()
+        return depth_img
+    except Exception as e:
+        logger.error(f"Failed to extract depth from cloud: {e}")
+        return None
+
+
+def project_unordered_cloud(msg, width, height, P) -> np.ndarray:
+    """Project unordered PointCloud2 to depth with projection matrix P."""
+    try:
+        # Parse Data
+        raw_data = np.frombuffer(msg.data, dtype=np.uint8)
+
+        n_points = msg.width
+        points_data = raw_data.reshape(n_points, msg.point_step)
+
+        x_off = next(f.offset for f in msg.fields if f.name == "x")
+        y_off = next(f.offset for f in msg.fields if f.name == "y")
+        z_off = next(f.offset for f in msg.fields if f.name == "z")
+        x = points_data[:, x_off : x_off + 4].copy().view(dtype=np.float32).flatten()
+        y = points_data[:, y_off : y_off + 4].copy().view(dtype=np.float32).flatten()
+        z = points_data[:, z_off : z_off + 4].copy().view(dtype=np.float32).flatten()
+
+        # Filter: Valid depth only (Z > 0)
+        valid_mask = (z > 0) & np.isfinite(z)
+        x, y, z = x[valid_mask], y[valid_mask], z[valid_mask]
+
+        if x.size == 0:
+            return np.zeros((height, width), dtype=np.float32)
+
+        # Construct Homogeneous 3D Points [x, y, z, 1]^T
+        points_hom = np.vstack((x, y, z, np.ones_like(x)))
+
+        # Projection: x_img = P * X_world
+        P_mat = np.array(P, dtype=np.float32).reshape(3, 4)
+        uvw = P_mat @ points_hom  # (3, 4) x (4, N) -> (3, N)
+
+        # Normalize Homogeneous -> Euclidean
+        w_prime = uvw[2, :]
+        np.maximum(w_prime, 1e-6, out=w_prime)
+        u = (uvw[0, :] / w_prime).round().astype(int)
+        v = (uvw[1, :] / w_prime).round().astype(int)
+
+        # Filter: Bounds Check
+        valid_uv = (u >= 0) & (u < width) & (v >= 0) & (v < height)
+        u, v, z = u[valid_uv], v[valid_uv], z[valid_uv]
+
+        # Z-Buffer Sorting
+        sort_idx = np.argsort(z)[::-1]
+        u, v, z = u[sort_idx], v[sort_idx], z[sort_idx]
+
+        # Fill Image
+        depth_img = np.zeros((height, width), dtype=np.float32)
+        depth_img[v, u] = z
+        return depth_img
+
+    except Exception as e:
+        logger.error(f"Homogeneous projection failed: {e}")
+        return None
+
+
 def save_depth(depth: np.ndarray, filename: str) -> None:
     """
     Save a float32 depth image (in meters) as a 16-bit PNG in millimeters.

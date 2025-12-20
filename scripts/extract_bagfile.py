@@ -1,6 +1,7 @@
 import argparse
 import logging
 from collections import defaultdict
+from functools import partial
 from pathlib import Path
 
 import numpy as np
@@ -9,7 +10,7 @@ import yaml
 from tqdm import tqdm
 
 from rosbagkit.bagreader import read_bagfile
-from rosbagkit.conversions.depth import read_depth_msg, save_depth
+from rosbagkit.conversions.depth import read_depth_msg, read_pointcloud_depth_msg, save_depth
 from rosbagkit.conversions.geo import read_gps_msg
 from rosbagkit.conversions.image import read_image_msg, save_image
 from rosbagkit.conversions.motion import (
@@ -72,7 +73,7 @@ def process_topic_msgs(topic_cfg: dict, msgs: list[tuple[float, object]], output
         outfile = output_dir / topic_cfg["outpath"]
         outfile.parent.mkdir(parents=True, exist_ok=True)
         process_csv_msgs(msgs, outfile)
-    elif fmt == "image" or fmt == "depth":
+    elif fmt == "image" or fmt == "depth" or fmt == "pointcloud_depth":
         subdir = output_dir / topic_cfg["outdir"]
         subdir.mkdir(parents=True, exist_ok=True)
         prefix_base = "_".join(topic_cfg["outdir"].split("/"))
@@ -82,6 +83,9 @@ def process_topic_msgs(topic_cfg: dict, msgs: list[tuple[float, object]], output
             process_image_msgs(msgs, subdir, ts_file, prefix, read_image_msg, save_image)
         elif fmt == "depth":
             process_image_msgs(msgs, subdir, ts_file, prefix, read_depth_msg, save_depth)
+        elif fmt == "pointcloud_depth":
+            reader_fn = partial(read_pointcloud_depth_msg, **topic_cfg)
+            process_image_msgs(msgs, subdir, ts_file, prefix, reader_fn, save_depth)
     else:
         raise NotImplementedError(f"Unsupported format: {fmt}")
 
@@ -130,9 +134,7 @@ def process_image_msgs(
     save_fn: callable,
 ):
     timestamps = []
-    for frame_idx, (ts, msg) in enumerate(
-        tqdm(msgs, desc=f"process {outdir.name}", leave=False, dynamic_ncols=True)
-    ):
+    for frame_idx, (ts, msg) in enumerate(tqdm(msgs, desc=f"process {outdir.name}", leave=False, dynamic_ncols=True)):
         if hasattr(msg, "header") and ts < 1e-3:
             logger.warning(f"Invalid timestamp {ts} for message {msg}")
             continue
