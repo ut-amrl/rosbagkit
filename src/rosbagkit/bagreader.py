@@ -69,9 +69,7 @@ def read_bagfile(
         timestamps = [ts for ts, _ in msgs]
         dupes = [ts for ts, count in Counter(timestamps).items() if count > 1]
         if dupes:
-            logger.warning(
-                f"[DUPLICATES] Topic {topic} has {len(dupes)} duplicate ts (e.g. {dupes[:5]})"
-            )
+            logger.warning(f"[DUPLICATES] Topic {topic} has {len(dupes)} duplicate ts (e.g. {dupes[:5]})")
 
     return topics_to_msgs
 
