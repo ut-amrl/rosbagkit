@@ -10,7 +10,11 @@ logger = logging.getLogger(__name__)
 
 
 def read_bagfile(
-    bagfile: str, topics: list[str], start_time: float = 0.0, end_time: float = float("inf")
+    bagfile: str,
+    topics: list[str],
+    start_time: float = 0.0,
+    end_time: float = float("inf"),
+    early_return: bool = False,
 ) -> dict[str, list[tuple[float, object]]]:  # topic: [(timestamp, message), ...]
     if not topics:
         logger.warning("[TOPICS] No topics provided. Returning empty result.")
@@ -51,6 +55,10 @@ def read_bagfile(
 
             if start_time <= ts_sec <= end_time:
                 topics_to_msgs[connection.topic].append((ts_sec, msg))
+
+            if early_return and all(len(msgs) > 0 for msgs in topics_to_msgs.values()):
+                logger.info("\n[EARLY RETURN] All topics have at least one message.")
+                break
 
     # Sort the messages by timestamp for each topic
     for msgs in topics_to_msgs.values():

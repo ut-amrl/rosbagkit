@@ -20,7 +20,7 @@ def extract_camera_info(bagfile: str):
         return
 
     logger.info(f"[FOUND] {len(cam_info_topics)} camera_info topics found.")
-    topics_to_msgs = read_bagfile(bagfile, cam_info_topics)
+    topics_to_msgs = read_bagfile(bagfile, cam_info_topics, early_return=True)
 
     for topic in cam_info_topics:
         msgs = topics_to_msgs.get(topic, [])
@@ -57,7 +57,7 @@ def sanitize_topic_name(topic: str) -> str:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Extract CameraInfo from ROS bagfile")
-    parser.add_argument("--bagfile", required=True, help="Path to bagfile")
+    parser.add_argument("bagfile", help="Path to bagfile")
     args = parser.parse_args()
 
     extract_camera_info(args.bagfile)
