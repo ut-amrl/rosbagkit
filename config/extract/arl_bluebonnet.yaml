@@ -1,5 +1,5 @@
-bagfile_root: /robodata/dlee/Datasets/ARL_Jackal/bagfiles
-output_root: /robodata/dlee/Datasets/ARL_Jackal
+bagfile_root: /robodata/ARL_SARA/ARL_Jackal/rosbags
+output_root: /robodata/ARL_SARA/ARL_Jackal/extracted
 
 topics:
   /bluebonnet/sensors/camera/bluebonnet_realsense/color/image_raw:
@@ -8,9 +8,16 @@ topics:
   /bluebonnet/sensors/camera/bluebonnet_realsense/depth/image_rect_raw:
     format: depth
     outdir: depth
-  /bluebonnet/odometry/local:
-    format: csv
-    outpath: odom_local.csv
+  /bluebonnet/sensors/camera/bluebonnet_realsense/color/image_raw/compressed:
+    format: image
+    outdir: image_raw
+  # /bluebonnet/sensors/camera/bluebonnet_realsense/depth/color/points:
+  #   format: pointcloud_depth
+  #   outdir: depth
+  #   width: 848
+  #   height: 480
+  #   # prettier-ignore
+  #   P: [429.5533, 0.0, 431.5823, 0.0, 0.0, 429.5533, 240.2142, 0.0, 0.0, 0.0, 1.0, 0.0]
   /bluebonnet/platform/odom:
     format: csv
     outpath: odom_platform.csv
@@ -19,14 +26,74 @@ topics:
     outpath: gps.csv
 
 scenes:
-  ahg_courtyard_2025_07_03-18_09_49:
+  run_00_pickle_2026-01-12-15-33-59:
     bagfiles:
-      - rosbag2_2025_07_03-18_09_49
+      - pickle_2026-01-12/run_00_pickle_2026-01-12-15-33-59
     start: 0
     end: -1
 
-  ahg_courtyard_2025_07_03-18_17_34:
+  run_01_pickle_2026-01-12-16-05-32:
     bagfiles:
-      - rosbag2_2025_07_03-18_17_34
-    start: 1751581068.0
+      - pickle_2026-01-12/run_01_pickle_2026-01-12-16-05-32
+    start: 0
     end: -1
+
+  run_02_pickle_2026-01-12-16-49-31:
+    bagfiles:
+      - pickle_2026-01-12/run_02_pickle_2026-01-12-16-49-31
+    start: 0
+    end: -1
+
+  run_03_pickle_2026-01-12-17-03-52:
+    bagfiles:
+      - pickle_2026-01-12/run_03_pickle_2026-01-12-17-03-52
+    start: 0
+    end: -1
+
+  run_04_pickle_2026-01-12-17-28-39:
+    bagfiles:
+      - pickle_2026-01-12/run_04_pickle_2026-01-12-17-28-39
+    start: 0
+    end: -1
+
+  # pickle_north_2025-12-18-11-44-00:
+  #   bagfiles:
+  #     - pickle_2025-12-18/pickle_north_2025-12-18-11-44-00
+  #   start: 0
+  #   end: -1
+
+  # pickle_south_2025-12-18-10-50-42:
+  #   bagfiles:
+  #     - pickle_2025-12-18/pickle_south_2025-12-18-10-50-42
+  #   start: 0
+  #   end: -1
+
+  # run_01_speedway_2025-11-26-13-31-13:
+  #   bagfiles:
+  #     - run_01_speedway_2025-11-26-13-31-13
+  #   start: 0
+  #   end: -1
+
+  # run_02_eastwoods_2025-11-30-16-44-19:
+  #   bagfiles:
+  #     - run_02_eastwoods_2025-11-30-16-44-19
+  #   start: 0
+  #   end: -1
+
+  # run_03_eastwoods_2025-11-30-16-49-57:
+  #   bagfiles:
+  #     - run_03_eastwoods_2025-11-30-16-49-57
+  #   start: 0
+  #   end: -1
+
+  # run_04_eastwoods_2025-11-30-16-53-02:
+  #   bagfiles:
+  #     - run_04_eastwoods_2025-11-30-16-53-02
+  #   start: 0
+  #   end: -1
+
+  # run_05_onioncreek_2025-11-30-18-28-52:
+  #   bagfiles:
+  #     - run_05_onioncreek_2025-11-30-18-28-52
+  #   start: 0
+  #   end: -1
