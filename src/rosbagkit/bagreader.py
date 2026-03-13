@@ -2,9 +2,10 @@ import logging
 from collections import Counter
 from pathlib import Path
 
-# https://gitlab.com/ternaris/rosbags
 from rosbags.highlevel import AnyReader
 from tqdm import tqdm
+
+from rosbagkit.utils.misc import format_bytes, get_path_size
 
 logger = logging.getLogger(__name__)
 
@@ -113,26 +114,3 @@ def get_topic_frame_ids(bagfile: str, max_msg_per_topic: int = 1) -> dict[str, s
     except Exception as e:
         logger.exception(f"[ERROR] Failed to extract frame_id from bagfile: {e}")
         return {}
-
-
-##### Helper Functions #####
-
-
-def get_path_size(path: str) -> int:
-    path = Path(path)
-    if path.is_file():  # ROS1
-        return path.stat().st_size
-    elif path.is_dir():  # ROS2
-        return sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
-    return 0
-
-
-def format_bytes(size_in_bytes: int) -> str:
-    if size_in_bytes >= 1024**3:
-        return f"{size_in_bytes / 1024**3:.2f} GB"
-    elif size_in_bytes >= 1024**2:
-        return f"{size_in_bytes / 1024**2:.2f} MB"
-    elif size_in_bytes >= 1024:
-        return f"{size_in_bytes / 1024:.2f} KB"
-    else:
-        return f"{size_in_bytes} bytes"
