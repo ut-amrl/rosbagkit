@@ -1,0 +1,23 @@
+bagfile_root: /path/to/bagfiles
+output_root: /path/to/output/lonebot
+
+topics:
+  /lonebot/sensors/realsense/camera/color/image_raw/compressed:
+    format: image
+    outdir: image_raw
+  /lonebot/sensors/realsense/camera/depth/image_rect_raw:
+    format: depth
+    outdir: depth
+  /lonebot/platform/odom:
+    format: csv
+    outpath: odom_platform.csv
+  /lonebot/sensors/ublox/fix:
+    format: csv
+    outpath: gps.csv
+
+scenes:
+  example_lonebot_run:
+    bagfiles:
+      - lonebot/example_run
+    start: 0
+    end: -1

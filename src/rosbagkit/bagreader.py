@@ -11,43 +11,45 @@ logger = logging.getLogger(__name__)
 
 
 def read_bagfile(
-    bagfile: str,
-    topics: list[str],
-    start_time: float = 0.0,
-    end_time: float = float("inf"),
-    early_return: bool = False,
+    bagfile: str, topics: list[str], start_time: float = 0.0, end_time: float = float("inf"), early_return: bool = False
 ) -> dict[str, list[tuple[float, object]]]:  # topic: [(timestamp, message), ...]
     if not topics:
-        logger.warning("[TOPICS] No topics provided. Returning empty result.")
+        tqdm.write("[TOPICS] No topics provided. Returning empty result.")
         return {}
 
     if end_time < 0:
         end_time = float("inf")
 
     topics_to_msgs = {topic: [] for topic in topics}
+    bagfile_path = Path(bagfile)
 
-    # Read the bagfile
-    logger.info(f"Opening bagfile -- {bagfile} ({format_bytes(get_path_size(bagfile))})")
-    with AnyReader([Path(bagfile)]) as reader:
+    tqdm.write(f"Opening {bagfile_path} ({format_bytes(get_path_size(bagfile))})...")
+    with AnyReader([bagfile_path]) as reader:
         connections = [c for c in reader.connections if c.topic in topics]
         available_topics = {c.topic for c in connections}
         missing_topics = set(topics) - available_topics
 
         if not missing_topics and available_topics:
-            logger.info(f"[TOPICS] All found: {topics}")
+            tqdm.write(f"[TOPICS] All found: {topics}")
         elif not connections:
-            logger.error(f"[TOPICS] None found: {topics}")
-            logger.debug(f"[TOPICS] Available: {[c.topic for c in reader.connections]}")
+            tqdm.write(f"[TOPICS] None found: {topics}")
+            tqdm.write(f"[TOPICS] Available: {[c.topic for c in reader.connections]}")
             return topics_to_msgs
         else:
-            logger.warning(f"[TOPICS] Missing: {missing_topics}")
-            logger.info(f"[TOPICS] Found: {available_topics}")
-            logger.debug(f"[TOPICS] All available: {[c.topic for c in reader.connections]}")
+            tqdm.write(f"[TOPICS] Missing: {missing_topics}")
+            tqdm.write(f"[TOPICS] Found: {available_topics}")
 
-        for connection, timestamp, rawdata in tqdm(reader.messages(connections=connections)):
+        total_msgs = sum(max(getattr(connection, "msgcount", 0), 0) for connection in connections) or None
+        for connection, timestamp, rawdata in tqdm(
+            reader.messages(connections=connections),
+            total=total_msgs,
+            desc=f"read {bagfile_path.name}",
+            unit="msg",
+            leave=False,
+            dynamic_ncols=True,
+        ):
             msg = reader.deserialize(rawdata, connection.msgtype)
 
-            # Use the message header timestamp if available
             header = getattr(msg, "header", None)
             if header and hasattr(header, "stamp"):
                 ts_sec = header.stamp.sec + header.stamp.nanosec * 1e-9
@@ -58,19 +60,17 @@ def read_bagfile(
                 topics_to_msgs[connection.topic].append((ts_sec, msg))
 
             if early_return and all(len(msgs) > 0 for msgs in topics_to_msgs.values()):
-                logger.info("\n[EARLY RETURN] All topics have at least one message.")
+                tqdm.write("[EARLY RETURN] All topics have at least one message.")
                 break
 
-    # Sort the messages by timestamp for each topic
     for msgs in topics_to_msgs.values():
         msgs.sort(key=lambda x: x[0])
 
-    # Check for duplicate timestamps
     for topic, msgs in topics_to_msgs.items():
         timestamps = [ts for ts, _ in msgs]
         dupes = [ts for ts, count in Counter(timestamps).items() if count > 1]
         if dupes:
-            logger.warning(f"[DUPLICATES] Topic {topic} has {len(dupes)} duplicate ts (e.g. {dupes[:5]})")
+            tqdm.write(f"[DUPLICATES] Topic {topic} has {len(dupes)} duplicate ts (e.g. {dupes[:5]})")
 
     return topics_to_msgs
 

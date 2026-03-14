@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 def extract_tf(bagfile: str, source_frame: str, target_frame: str, outfile: str):
     tf_topics = ["/tf", "/tf_static"]
-    tf_msgs_by_topic = read_bagfile(bagfile, tf_topics)
+    tf_msgs_by_topic = read_bagfile(bagfile, tf_topics, early_return=True)
     tf_msgs = tf_msgs_by_topic.get("/tf", []) + tf_msgs_by_topic.get("/tf_static", [])
 
     tf_map = build_tf_map(tf_msgs)
@@ -86,7 +86,7 @@ def transform_to_matrix(msg) -> np.ndarray:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Extract TF chain between frames from a bagfile")
-    parser.add_argument("--bagfile", required=True, help="Path to ROS bagfile")
+    parser.add_argument("bagfile", help="Path to bagfile")
     parser.add_argument("--src", default="imu", help="Source frame (default: imu)")
     parser.add_argument("--tgt", default="lidar", help="Target frame (default: lidar)")
     args = parser.parse_args()

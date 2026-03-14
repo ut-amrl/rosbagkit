@@ -1,9 +1,6 @@
-import logging
-
 import cv2
 import numpy as np
-
-logger = logging.getLogger(__name__)
+from tqdm import tqdm
 
 
 def read_depth_msg(msg) -> np.ndarray:
@@ -49,7 +46,7 @@ def read_pointcloud_depth_msg(msg, width=None, height=None, P=None, **kwargs) ->
     # Check if the cloud is ordered (Height> 1 implies 2D structure)
     if msg.height <= 1:
         if width is None or height is None or P is None:
-            logger.error("Unordered cloud detected but missing intrinsics (width/height/P)!")
+            tqdm.write("[WARN] Unordered cloud detected but missing intrinsics (width/height/P)!")
             return None
         return project_unordered_cloud(msg, width, height, P)
 
@@ -63,7 +60,7 @@ def read_pointcloud_depth_msg(msg, width=None, height=None, P=None, **kwargs) ->
         depth_img = z_bytes.view(dtype=np.float32).reshape(msg.height, msg.width).copy()
         return depth_img
     except Exception as e:
-        logger.error(f"Failed to extract depth from cloud: {e}")
+        tqdm.write(f"[WARN] Failed to extract depth from cloud: {e}")
         return None
 
 
@@ -90,34 +87,28 @@ def project_unordered_cloud(msg, width, height, P) -> np.ndarray:
         if x.size == 0:
             return np.zeros((height, width), dtype=np.float32)
 
-        # Construct Homogeneous 3D Points [x, y, z, 1]^T
         points_hom = np.vstack((x, y, z, np.ones_like(x)))
 
-        # Projection: x_img = P * X_world
-        P_mat = np.array(P, dtype=np.float32).reshape(3, 4)
-        uvw = P_mat @ points_hom  # (3, 4) x (4, N) -> (3, N)
+        p_mat = np.array(P, dtype=np.float32).reshape(3, 4)
+        uvw = p_mat @ points_hom
 
-        # Normalize Homogeneous -> Euclidean
         w_prime = uvw[2, :]
         np.maximum(w_prime, 1e-6, out=w_prime)
         u = (uvw[0, :] / w_prime).round().astype(int)
         v = (uvw[1, :] / w_prime).round().astype(int)
 
-        # Filter: Bounds Check
         valid_uv = (u >= 0) & (u < width) & (v >= 0) & (v < height)
         u, v, z = u[valid_uv], v[valid_uv], z[valid_uv]
 
-        # Z-Buffer Sorting
         sort_idx = np.argsort(z)[::-1]
         u, v, z = u[sort_idx], v[sort_idx], z[sort_idx]
 
-        # Fill Image
         depth_img = np.zeros((height, width), dtype=np.float32)
         depth_img[v, u] = z
         return depth_img
 
     except Exception as e:
-        logger.error(f"Homogeneous projection failed: {e}")
+        tqdm.write(f"[WARN] Homogeneous projection failed: {e}")
         return None
 
 
