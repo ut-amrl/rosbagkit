@@ -12,7 +12,7 @@ from tqdm import tqdm
 from rosbagkit import export_image_msgs, msgs_to_dataframe
 from rosbagkit.bagreader import read_bagfile
 from rosbagkit.camera.rectification import build_stereo_rectifier, sync_indices_closest
-from rosbagkit.camera.undistortion import build_single_camera_undistorter
+from rosbagkit.camera.undistortion import build_undistorter
 from rosbagkit.conversions.depth import read_depth_msg, read_pointcloud_depth_msg, save_depth
 from rosbagkit.conversions.geo import read_gps_msg
 from rosbagkit.conversions.image import read_image_msg, save_image
@@ -224,7 +224,7 @@ def build_undistortion_config(
         "output_dir": undist_cfg.get("output_dir", "undistorted"),
         "timestamp_file": undist_cfg.get("timestamp_file", "timestamps.txt"),
         "prefix": undist_cfg.get("prefix", "undistorted_"),
-        "undistorter": build_single_camera_undistorter(calib),
+        "undistorter": build_undistorter(calib),
     }
 
     tqdm.write(

@@ -6,7 +6,7 @@ import numpy as np
 from rosbagkit.camera.utils import load_camera_params
 
 
-class SingleCameraUndistorter:
+class Undistorter:
     def __init__(self, camera_matrix: np.ndarray, distortion_coeffs: np.ndarray, image_size: tuple[int, int]):
         self.image_size = tuple(int(v) for v in image_size)
         self.image_shape = (self.image_size[1], self.image_size[0])
@@ -28,7 +28,7 @@ class SingleCameraUndistorter:
         return cv2.remap(image, self.map_x, self.map_y, cv2.INTER_LINEAR)
 
 
-def build_single_camera_undistorter(calib: str | Path) -> SingleCameraUndistorter:
+def build_undistorter(calib: str | Path) -> Undistorter:
     cam = load_camera_params(calib)
     image_size = tuple(int(v) for v in cam["img_size"][::-1])
-    return SingleCameraUndistorter(cam["K"], cam["D"], image_size)
+    return Undistorter(cam["K"], cam["D"], image_size)
