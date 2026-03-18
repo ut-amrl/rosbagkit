@@ -3,50 +3,8 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-import yaml
 
-
-def load_extrinsics(extrinsic_file: str | Path) -> np.ndarray:
-    with open(extrinsic_file) as f:
-        params = yaml.safe_load(f)["extrinsic_matrix"]
-
-    if "R" in params and "T" in params:
-        extrinsic_matrix = np.eye(4)
-        extrinsic_matrix[:3, :3] = np.array(params["R"]["data"]).reshape(
-            params["rows"], params["cols"]
-        )
-        extrinsic_matrix[:3, 3] = np.array(params["T"])
-        return extrinsic_matrix
-
-    return np.array(params["data"]).reshape(params["rows"], params["cols"])
-
-
-def load_camera_params(intrinsic_file: str | Path) -> dict[str, np.ndarray]:
-    with open(intrinsic_file) as f:
-        params = yaml.safe_load(f)
-
-    cam_params: dict[str, np.ndarray] = {}
-    if "image_width" in params and "image_height" in params:
-        cam_params["img_size"] = np.array([params["image_height"], params["image_width"]])
-    elif "width" in params and "height" in params:
-        cam_params["img_size"] = np.array([params["height"], params["width"]])
-    else:
-        raise KeyError("Missing image size in calibration file")
-
-    if "camera_matrix" in params:
-        cam_params["K"] = np.array(params["camera_matrix"]["data"]).reshape(
-            params["camera_matrix"]["rows"],
-            params["camera_matrix"]["cols"],
-        )
-    else:
-        raise KeyError("Missing camera_matrix in calibration file")
-
-    if "distortion_coefficients" in params:
-        cam_params["D"] = np.array(params["distortion_coefficients"]["data"])
-    else:
-        raise KeyError("Missing distortion_coefficients in calibration file")
-
-    return cam_params
+from rosbagkit.camera.utils import load_camera_params, load_extrinsics
 
 
 def sync_indices_closest(
@@ -120,37 +78,24 @@ class StereoRectifier:
     def rectify(self, image: np.ndarray, left: bool = True) -> np.ndarray:
         if image.shape[:2] != self.image_shape:
             raise ValueError(
-                'Stereo image shape does not match rectifier calibration size: '
-                f'expected={self.image_shape} got={image.shape[:2]}'
+                "Stereo image shape does not match rectifier calibration size: "
+                f"expected={self.image_shape} got={image.shape[:2]}"
             )
         map_x = self.map_left_x if left else self.map_right_x
         map_y = self.map_left_y if left else self.map_right_y
         return cv2.remap(image, map_x, map_y, cv2.INTER_LINEAR)
 
 
-def build_stereo_rectifier(
-    left_calib: str | Path,
-    right_calib: str | Path,
-    extrinsics: str | Path,
-) -> StereoRectifier:
+def build_stereo_rectifier(left_calib: str | Path, right_calib: str | Path, extrinsics: str | Path) -> StereoRectifier:
     left_cam = load_camera_params(left_calib)
     right_cam = load_camera_params(right_calib)
     left_size = tuple(int(v) for v in left_cam["img_size"][::-1])
     right_size = tuple(int(v) for v in right_cam["img_size"][::-1])
     if left_size != right_size:
-        raise ValueError(
-            'Stereo calibration files must use the same image size: '
-            f'left={left_size} right={right_size}'
-        )
+        raise ValueError(f"Stereo calibration files must use the same image size: left={left_size} right={right_size}")
 
     transform = load_extrinsics(extrinsics)
 
     return StereoRectifier(
-        left_cam["K"],
-        left_cam["D"],
-        right_cam["K"],
-        right_cam["D"],
-        left_size,
-        transform[:3, :3],
-        transform[:3, 3],
+        left_cam["K"], left_cam["D"], right_cam["K"], right_cam["D"], left_size, transform[:3, :3], transform[:3, 3]
     )
