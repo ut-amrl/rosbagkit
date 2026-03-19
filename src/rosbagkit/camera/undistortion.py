@@ -7,16 +7,11 @@ from rosbagkit.camera.utils import load_camera_params
 
 
 class Undistorter:
-    def __init__(self, camera_matrix: np.ndarray, distortion_coeffs: np.ndarray, image_size: tuple[int, int]):
+    def __init__(self, intrinsic: np.ndarray, distortion_coeffs: np.ndarray, image_size: tuple[int, int]):
         self.image_size = tuple(int(v) for v in image_size)
         self.image_shape = (self.image_size[1], self.image_size[0])
         self.map_x, self.map_y = cv2.initUndistortRectifyMap(
-            camera_matrix,
-            distortion_coeffs,
-            np.eye(3),
-            camera_matrix,
-            self.image_size,
-            cv2.CV_32FC1,
+            intrinsic, distortion_coeffs, np.eye(3), intrinsic, self.image_size, cv2.CV_32FC1
         )
 
     def undistort(self, image: np.ndarray) -> np.ndarray:

@@ -1,46 +1,9 @@
-import bisect
 from pathlib import Path
 
 import cv2
 import numpy as np
 
 from rosbagkit.camera.utils import load_camera_params, load_extrinsics
-
-
-def sync_indices_closest(
-    left_timestamps: list[float] | np.ndarray,
-    right_timestamps: list[float] | np.ndarray,
-    threshold: float = 0.005,
-) -> tuple[list[int], list[int], list[float]]:
-    left_ts = np.asarray(left_timestamps, dtype=float)
-    right_ts = np.asarray(right_timestamps, dtype=float)
-
-    left_indices: list[int] = []
-    right_indices: list[int] = []
-    synced_timestamps: list[float] = []
-    used_right: set[int] = set()
-
-    for left_idx, left_ts_val in enumerate(left_ts):
-        pos = bisect.bisect_left(right_ts, left_ts_val)
-        best_idx = None
-        best_diff = threshold
-
-        for right_idx in (pos - 1, pos):
-            if 0 <= right_idx < len(right_ts) and right_idx not in used_right:
-                diff = abs(left_ts_val - right_ts[right_idx])
-                if diff < best_diff:
-                    best_diff = diff
-                    best_idx = right_idx
-
-        if best_idx is None:
-            continue
-
-        left_indices.append(left_idx)
-        right_indices.append(best_idx)
-        synced_timestamps.append(float(left_ts_val))
-        used_right.add(best_idx)
-
-    return left_indices, right_indices, synced_timestamps
 
 
 class StereoRectifier:

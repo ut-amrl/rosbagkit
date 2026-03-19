@@ -1,10 +1,13 @@
-bagfile_root: /path/to/bagfiles
-output_root: /path/to/output/lonebot
+bagfile_root: data/ARL_Jackal/rosbags
+output_root: data/ARL_Jackal/extracted
 
 topics:
   /lonebot/sensors/realsense/camera/color/image_raw/compressed:
     format: image
-    outdir: image_raw
+    outdir: image
+    undistortion:
+      enabled: true
+      calib: data/ARL_Jackal/rosbags/lonebot_sensors_realsense_camera_color_intrinsics.yaml
   /lonebot/sensors/realsense/camera/depth/image_rect_raw:
     format: depth
     outdir: depth
@@ -18,15 +21,17 @@ topics:
     format: csv
     outpath: gps.csv
 
-scenes:
-  example_eastwood_run_00:
-    bagfiles:
-      - eastwood/example_run_00
-    start: 0
-    end: -1
+sync:
+  enabled: true
+  topics:
+    - /lonebot/sensors/realsense/camera/color/image_raw/compressed
+    - /lonebot/sensors/realsense/camera/depth/image_rect_raw
+  threshold: 0.1
 
-  example_eastwood_run_01:
+scenes:
+  # Each bagfiles entry is relative to bagfile_root.
+  eastwood_teleop-01_2026-02-19-11-50-35:
     bagfiles:
-      - eastwood/example_run_01
+      - 2-19-eastwood/run_01_eastwood-park-teleop_2026-02-19-11-50-35
     start: 0
     end: -1
