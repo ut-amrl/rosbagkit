@@ -4,7 +4,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
 # System deps:
-# - git: clone rosbagkit
 # - libgl1/libglib2.0-0: common runtime deps for opencv-python
 # - bash/ca-certificates: convenience and HTTPS certs
 # - vim/nano included for editing yaml files
@@ -67,7 +66,7 @@ WORKDIR /workspace/rosbagkit
 
 # Install Python package dependencies from pyproject.toml.
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
-    && pip install --no-cache-dir -e .
+    && pip install --no-cache-dir .
 
 # External data mount point.
 RUN mkdir -p /workspace/data \
