@@ -35,8 +35,12 @@ if [ ! -d "${HOST_DATA_DIR}" ]; then
   exit 1
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HOST_CONFIG_DIR="${SCRIPT_DIR}/../config"
+
 docker run -it --rm \
   --name rosbagkit \
   -v "${HOST_DATA_DIR}:/workspace/data:rw" \
+  -v "${HOST_CONFIG_DIR}:/workspace/rosbagkit/config:rw" \
   -w /workspace/rosbagkit \
   "${IMAGE_NAME}"
