@@ -5,6 +5,9 @@ topics:
   /lonebot/sensors/realsense/camera/color/image_raw/compressed:
     format: image
     outdir: image_raw
+    undistortion:
+      enabled: true
+      calib: /path/to/realsense_color_intrinsics.yaml
   /lonebot/sensors/realsense/camera/depth/image_rect_raw:
     format: depth
     outdir: depth
@@ -15,7 +18,15 @@ topics:
     format: csv
     outpath: gps.csv
 
+sync:
+  enabled: true
+  topics:
+    - /lonebot/sensors/realsense/camera/color/image_raw/compressed
+    - /lonebot/sensors/realsense/camera/depth/image_rect_raw
+  threshold: 0.005
+
 scenes:
+  # Each bagfiles entry is relative to bagfile_root.
   example_lonebot_run:
     bagfiles:
       - lonebot/example_run

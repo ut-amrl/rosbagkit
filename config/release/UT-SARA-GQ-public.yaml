@@ -10,8 +10,6 @@ topics_keep:
   - /trevor/lidar_points
   - /trevor/stereo_left
   - /trevor/stereo_right
-  - /trevor/multisense_forward
-  - /trevor/multisense_rear
   - /trevor/warthog_velocity_controller
   - /trevor/left_drive
   - /trevor/right_drive
@@ -21,6 +19,8 @@ topics_exclude:
   - /trevor/lidar_points_center
   - /trevor/imu/filter/status
   - /trevor/imu/pps_status
+  - /trevor/multisense_forward
+  - /trevor/multisense_rear
 
 scenes:
   2024-08-12-11-32-46:

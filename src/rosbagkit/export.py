@@ -35,7 +35,11 @@ def msgs_to_dataframe(
 
 
 def export_image_msgs(
-    msgs: Sequence[tuple[float, object]], outdir: str | Path, ts_file: str | Path, prefix: str = ""
+    msgs: Sequence[tuple[float, object]],
+    outdir: str | Path,
+    ts_file: str | Path,
+    prefix: str = "",
+    image_transform: Callable[[np.ndarray], np.ndarray] | None = None,
 ) -> None:
     outdir = Path(outdir)
     ts_file = Path(ts_file)
@@ -53,6 +57,8 @@ def export_image_msgs(
             if image is None:
                 tqdm.write(f"[WARN] Empty image for message {msg}")
                 continue
+            if image_transform is not None:
+                image = image_transform(image)
             saved = save_image(image, str(outfile))
         except Exception as exc:
             tqdm.write(f"[WARN] Failed to process/save image {outfile}: {exc}")

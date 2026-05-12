@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 from rosbagkit import export_image_msgs, msgs_to_dataframe
 from rosbagkit.bagreader import read_bagfile
-from rosbagkit.camera.rectification import build_stereo_rectifier, sync_indices_closest
+from rosbagkit.camera.rectification import build_stereo_rectifier
 from rosbagkit.camera.undistortion import build_undistorter
 from rosbagkit.conversions.depth import read_depth_msg, read_pointcloud_depth_msg, save_depth
 from rosbagkit.conversions.geo import read_gps_msg
@@ -23,10 +23,11 @@ from rosbagkit.conversions.motion import (
     read_twist_msg,
     read_twist_stamped_msg,
 )
+from rosbagkit.utils.synchronization import build_sync_config, filter_synced_messages, sync_indices_closest
 
 EXTRACTION_REQUIRED_KEYS = {"bagfile_root", "output_root", "topics", "scenes"}
 RECTIFICATION_REQUIRED_KEYS = {"left_topic", "right_topic", "left_calib", "right_calib", "extrinsics"}
-UNDISTORTION_REQUIRED_KEYS = {"topic", "calib"}
+UNDISTORTION_REQUIRED_KEYS = {"calib"}
 
 MSG_READERS = {
     "sensor_msgs__msg__NavSatFix": read_gps_msg,
@@ -42,6 +43,14 @@ def _has_invalid_header_timestamp(ts: float, msg: object) -> bool:
     return hasattr(msg, "header") and ts < 1e-3
 
 
+def _outdir_prefix_base(outdir: str) -> str:
+    return "_".join(outdir.split("/"))
+
+
+def _filter_valid_msgs(msgs: list[tuple[float, object]]) -> list[tuple[float, object]]:
+    return [(ts, msg) for ts, msg in msgs if not _has_invalid_header_timestamp(ts, msg)]
+
+
 def extract_bagfile(config: dict[str, Any]) -> None:
     validate_extraction_config(config)
 
@@ -50,13 +59,12 @@ def extract_bagfile(config: dict[str, Any]) -> None:
     topics_info = config["topics"]
     scenes = config["scenes"]
     rectification = build_rectification_config(config.get("rectification"), topics_info)
-    undistortion = build_undistortion_config(config.get("undistortion"), topics_info, rectification)
+    undistortions = build_undistortion_configs(topics_info, rectification)
+    sync = build_sync_config(config.get("sync"), topics_info)
 
     skipped_topics = set()
     if rectification is not None:
         skipped_topics = {rectification["left_topic"], rectification["right_topic"]}
-    if undistortion is not None:
-        skipped_topics.add(undistortion["topic"])
 
     for idx, (scene_name, scene_cfg) in enumerate(scenes.items(), start=1):
         output_dir = output_root / scene_name
@@ -65,6 +73,8 @@ def extract_bagfile(config: dict[str, Any]) -> None:
         topics_to_msgs = collect_scene_messages(
             scene_name=scene_name, scene_cfg=scene_cfg, bagfile_root=bagfile_root, topics=list(topics_info.keys())
         )
+        if sync is not None:
+            topics_to_msgs = filter_synced_messages(sync, topics_to_msgs)
 
         for topic, topic_cfg in topics_info.items():
             msgs = topics_to_msgs.get(topic)
@@ -75,8 +85,6 @@ def extract_bagfile(config: dict[str, Any]) -> None:
             if topic in skipped_topics:
                 if rectification is not None and topic in {rectification["left_topic"], rectification["right_topic"]}:
                     tqdm.write(f"[RECTIFY] Skipping raw export for stereo topic: {topic}")
-                elif undistortion is not None and topic == undistortion["topic"]:
-                    tqdm.write(f"[UNDISTORT] Skipping raw export for undistorted topic: {topic}")
                 continue
 
             fmt = topic_cfg["format"]
@@ -91,12 +99,15 @@ def extract_bagfile(config: dict[str, Any]) -> None:
                 subdir = output_dir / topic_cfg["outdir"]
                 subdir.mkdir(parents=True, exist_ok=True)
 
-                prefix_base = "_".join(topic_cfg["outdir"].split("/"))
+                prefix_base = _outdir_prefix_base(topic_cfg["outdir"])
                 ts_file = output_dir / f"timestamp_{prefix_base}.txt"
                 prefix = f"{prefix_base}_"
 
                 if fmt == "image":
-                    export_image_msgs(msgs, subdir, ts_file, prefix)
+                    image_transform = None
+                    if topic in undistortions:
+                        image_transform = undistortions[topic]["undistorter"].undistort
+                    export_image_msgs(msgs, subdir, ts_file, prefix, image_transform=image_transform)
                     continue
 
                 if fmt == "depth":
@@ -112,9 +123,14 @@ def extract_bagfile(config: dict[str, Any]) -> None:
             raise NotImplementedError(f"Unsupported format: {fmt}")
 
         if rectification is not None:
-            process_rectified_stereo_msgs(rectification, topics_to_msgs, output_dir)
-        if undistortion is not None:
-            process_undistorted_image_msgs(undistortion, topics_to_msgs, output_dir)
+            sync_topics = set(sync["topics"]) if sync is not None else set()
+            rectification_presynced = {rectification["left_topic"], rectification["right_topic"]}.issubset(sync_topics)
+            process_rectified_stereo_msgs(
+                rectification,
+                topics_to_msgs,
+                output_dir,
+                presynced=rectification_presynced,
+            )
 
 
 def validate_extraction_config(config: dict[str, Any]) -> None:
@@ -193,45 +209,34 @@ def build_rectification_config(rect_cfg: dict[str, Any] | None, topics_info: dic
     return cfg
 
 
-def build_undistortion_config(
-    undist_cfg: dict[str, Any] | None,
-    topics_info: dict[str, dict],
-    rectification: dict[str, Any] | None = None,
-) -> dict[str, Any] | None:
-    if not undist_cfg or not undist_cfg.get("enabled", False):
-        return None
+def build_undistortion_configs(
+    topics_info: dict[str, dict], rectification: dict[str, Any] | None = None
+) -> dict[str, dict[str, Any]]:
+    configs: dict[str, dict[str, Any]] = {}
 
-    missing = sorted(UNDISTORTION_REQUIRED_KEYS - undist_cfg.keys())
-    if missing:
-        raise KeyError(f"Missing undistortion config keys: {missing}")
+    for topic, topic_cfg in topics_info.items():
+        undist_cfg = topic_cfg.get("undistortion")
+        if not undist_cfg or not undist_cfg.get("enabled", False):
+            continue
 
-    topic = undist_cfg["topic"]
-    if topic not in topics_info:
-        raise KeyError(f"Undistortion topic not found in topics config: {topic}")
-    if topics_info[topic].get("format") != "image":
-        raise ValueError(f"Undistortion topic must use format 'image': {topic}")
+        missing = sorted(UNDISTORTION_REQUIRED_KEYS - undist_cfg.keys())
+        if missing:
+            raise KeyError(f"Missing undistortion config keys for topic {topic}: {missing}")
 
-    if rectification is not None and topic in {rectification["left_topic"], rectification["right_topic"]}:
-        raise ValueError(f"Undistortion topic conflicts with stereo rectification topic: {topic}")
+        if topic_cfg.get("format") != "image":
+            raise ValueError(f"Undistortion topic must use format 'image': {topic}")
 
-    calib = Path(undist_cfg["calib"])
-    if not calib.exists():
-        raise FileNotFoundError(f"Undistortion calibration file not found: {calib}")
+        if rectification is not None and topic in {rectification["left_topic"], rectification["right_topic"]}:
+            raise ValueError(f"Undistortion topic conflicts with stereo rectification topic: {topic}")
 
-    cfg = {
-        "topic": topic,
-        "calib": calib,
-        "output_dir": undist_cfg.get("output_dir", "undistorted"),
-        "timestamp_file": undist_cfg.get("timestamp_file", "timestamps.txt"),
-        "prefix": undist_cfg.get("prefix", "undistorted_"),
-        "undistorter": build_undistorter(calib),
-    }
+        calib = Path(undist_cfg["calib"])
+        if not calib.exists():
+            raise FileNotFoundError(f"Undistortion calibration file not found for topic {topic}: {calib}")
 
-    tqdm.write(
-        f"[UNDISTORT] Enabled export-time undistortion for "
-        f"topic={topic} output={cfg['output_dir']}"
-    )
-    return cfg
+        configs[topic] = {"topic": topic, "calib": calib, "undistorter": build_undistorter(calib)}
+        tqdm.write(f"[UNDISTORT] Enabled export-time undistortion for topic={topic}")
+
+    return configs
 
 
 def collect_scene_messages(
@@ -298,29 +303,36 @@ def process_raster_msgs(
 
 
 def process_rectified_stereo_msgs(
-    rectification: dict[str, Any], topics_to_msgs: dict[str, list[tuple[float, object]]], output_dir: Path
+    rectification: dict[str, Any],
+    topics_to_msgs: dict[str, list[tuple[float, object]]],
+    output_dir: Path,
+    presynced: bool = False,
 ) -> None:
-    left_msgs = [
-        (ts, msg)
-        for ts, msg in topics_to_msgs.get(rectification["left_topic"], [])
-        if not _has_invalid_header_timestamp(ts, msg)
-    ]
-    right_msgs = [
-        (ts, msg)
-        for ts, msg in topics_to_msgs.get(rectification["right_topic"], [])
-        if not _has_invalid_header_timestamp(ts, msg)
-    ]
+    left_msgs = _filter_valid_msgs(topics_to_msgs.get(rectification["left_topic"], []))
+    right_msgs = _filter_valid_msgs(topics_to_msgs.get(rectification["right_topic"], []))
     if not left_msgs or not right_msgs:
         tqdm.write(f"[RECTIFY] Missing stereo messages. left={len(left_msgs)} right={len(right_msgs)}")
         return
 
-    left_ts = [ts for ts, _ in left_msgs]
-    right_ts = [ts for ts, _ in right_msgs]
-    left_idx, right_idx, synced_ts = sync_indices_closest(left_ts, right_ts, threshold=rectification["threshold"])
-
-    if not left_idx:
-        tqdm.write(f"[RECTIFY] No stereo pairs matched within threshold {rectification['threshold']:.6f}")
-        return
+    if presynced:
+        if len(left_msgs) != len(right_msgs):
+            tqdm.write(
+                f"[RECTIFY] Presynchronized stereo topics must have equal lengths. "
+                f"left={len(left_msgs)} right={len(right_msgs)}"
+            )
+            return
+        pairs = zip(left_msgs, right_msgs, strict=False)
+        total = len(left_msgs)
+        synced_ts = [ts for ts, _ in left_msgs]
+    else:
+        left_ts = [ts for ts, _ in left_msgs]
+        right_ts = [ts for ts, _ in right_msgs]
+        left_idx, right_idx, synced_ts = sync_indices_closest(left_ts, right_ts, threshold=rectification["threshold"])
+        if not left_idx:
+            tqdm.write(f"[RECTIFY] No stereo pairs matched within threshold {rectification['threshold']:.6f}")
+            return
+        pairs = ((left_msgs[li], right_msgs[ri]) for li, ri in zip(left_idx, right_idx, strict=False))
+        total = len(left_idx)
 
     rectified_root = output_dir / rectification["output_dir"]
     left_outdir = rectified_root / rectification["left_subdir"]
@@ -330,18 +342,9 @@ def process_rectified_stereo_msgs(
 
     rectifier = rectification["rectifier"]
 
-    for frame_idx, (li, ri) in enumerate(
-        tqdm(
-            zip(left_idx, right_idx, strict=False),
-            total=len(left_idx),
-            desc="process stereo_rectified",
-            leave=False,
-            dynamic_ncols=True,
-        )
+    for frame_idx, ((_, left_msg), (_, right_msg)) in enumerate(
+        tqdm(pairs, total=total, desc="process stereo_rectified", leave=False, dynamic_ncols=True)
     ):
-        _, left_msg = left_msgs[li]
-        _, right_msg = right_msgs[ri]
-
         left_img = read_image_msg(left_msg)
         right_img = read_image_msg(right_msg)
         left_rect = rectifier.rectify(left_img, left=True)
@@ -357,53 +360,6 @@ def process_rectified_stereo_msgs(
         delimiter=",",
     )
     tqdm.write(f"[SUCCESS] Saved {len(synced_ts)} rectified stereo pairs to {rectified_root}")
-
-
-def process_undistorted_image_msgs(
-    undistortion: dict[str, Any], topics_to_msgs: dict[str, list[tuple[float, object]]], output_dir: Path
-) -> None:
-    msgs = [
-        (ts, msg)
-        for ts, msg in topics_to_msgs.get(undistortion["topic"], [])
-        if not _has_invalid_header_timestamp(ts, msg)
-    ]
-    if not msgs:
-        tqdm.write(f"[UNDISTORT] No messages found for topic: {undistortion['topic']}")
-        return
-
-    outdir = output_dir / undistortion["output_dir"]
-    outdir.mkdir(parents=True, exist_ok=True)
-
-    timestamps: list[float] = []
-    undistorter = undistortion["undistorter"]
-    prefix = undistortion["prefix"]
-
-    for frame_idx, (ts, msg) in enumerate(
-        tqdm(msgs, desc=f"process {outdir.name}", leave=False, dynamic_ncols=True)
-    ):
-        outfile = outdir / f"{prefix}{frame_idx:06d}.png"
-
-        try:
-            image = read_image_msg(msg)
-            image = undistorter.undistort(image)
-            saved = save_image(image, str(outfile))
-        except Exception as exc:
-            tqdm.write(f"[WARN] Failed to process/save undistorted image {outfile}: {exc}")
-            continue
-
-        if not saved:
-            tqdm.write(f"[WARN] Failed to save undistorted image {outfile}")
-            continue
-
-        timestamps.append(ts)
-
-    np.savetxt(
-        outdir / undistortion["timestamp_file"],
-        np.array(timestamps).reshape(-1, 1),
-        fmt="%.6f",
-        delimiter=",",
-    )
-    tqdm.write(f"[SUCCESS] Saved {len(timestamps)} undistorted images to {outdir}")
 
 
 if __name__ == "__main__":
