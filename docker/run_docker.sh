@@ -3,14 +3,37 @@ set -euo pipefail
 
 IMAGE_NAME="${IMAGE_NAME:-rosbagkit:latest}"
 
-# Usage:
-#   ./run_docker.sh /path/to/your/data
-#
-# Default host data dir:
-#   ./data
-HOST_DATA_DIR="${1:-${PWD}/data}"
+usage() {
+  echo "Usage:"
+  echo "  $0 /path/to/your/data"
+  echo
+  echo "Example:"
+  echo "  $0 \$HOME/rosbags"
+  echo
+  echo "The provided host data directory will be mounted to:"
+  echo "  /workspace/data"
+  echo
+}
 
-mkdir -p "${HOST_DATA_DIR}"
+if [ "$#" -ne 1 ]; then
+  echo "Error: you must provide a host data directory."
+  echo
+  usage
+  exit 1
+fi
+
+HOST_DATA_DIR="$1"
+
+if [ ! -d "${HOST_DATA_DIR}" ]; then
+  echo "Error: data directory does not exist:"
+  echo "  ${HOST_DATA_DIR}"
+  echo
+  echo "Create it first, for example:"
+  echo "  mkdir -p \"${HOST_DATA_DIR}\""
+  echo
+  usage
+  exit 1
+fi
 
 docker run -it --rm \
   --name rosbagkit \

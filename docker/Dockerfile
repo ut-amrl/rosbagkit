@@ -7,10 +7,13 @@ ENV PYTHONUNBUFFERED=1
 # - git: clone rosbagkit
 # - libgl1/libglib2.0-0: common runtime deps for opencv-python
 # - bash/ca-certificates: convenience and HTTPS certs
+# - vim/nano included for editing yaml files
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
     ca-certificates \
     git \
+    vim \
+    nano \
     libgl1 \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*

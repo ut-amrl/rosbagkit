@@ -2,7 +2,7 @@
 set -euo pipefail
 
 IMAGE_NAME="${IMAGE_NAME:-rosbagkit:latest}"
-ROSBAGKIT_COMMIT="${ROSBAGKIT_COMMIT:-main}"
+ROSBAGKIT_COMMIT="${ROSBAGKIT_COMMIT:-quattro}"
 
 USER_UID="$(id -u)"
 USER_GID="$(id -g)"
