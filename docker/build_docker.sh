@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Run from within rosbagkit/docker
-
 IMAGE_NAME="${IMAGE_NAME:-rosbagkit:latest}"
 ROSBAGKIT_COMMIT="${ROSBAGKIT_COMMIT:-quattro}"
 
