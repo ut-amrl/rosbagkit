@@ -59,7 +59,7 @@ def extract_bagfile(config: dict[str, Any]) -> None:
     topics_info = config["topics"]
     scenes = config["scenes"]
     rectification = build_rectification_config(config.get("rectification"), topics_info)
-    undistortions = build_undistortion_configs(topics_info, rectification)
+    undistortions = build_undistortion_configs(topics_info, bagfile_root, rectification)
     sync = build_sync_config(config.get("sync"), topics_info)
 
     skipped_topics = set()
@@ -210,7 +210,7 @@ def build_rectification_config(rect_cfg: dict[str, Any] | None, topics_info: dic
 
 
 def build_undistortion_configs(
-    topics_info: dict[str, dict], rectification: dict[str, Any] | None = None
+    topics_info: dict[str, dict], bagfile_root: Path, rectification: dict[str, Any] | None = None
 ) -> dict[str, dict[str, Any]]:
     configs: dict[str, dict[str, Any]] = {}
 
@@ -229,7 +229,7 @@ def build_undistortion_configs(
         if rectification is not None and topic in {rectification["left_topic"], rectification["right_topic"]}:
             raise ValueError(f"Undistortion topic conflicts with stereo rectification topic: {topic}")
 
-        calib = Path(undist_cfg["calib"])
+        calib = bagfile_root / Path(undist_cfg["calib"])
         if not calib.exists():
             raise FileNotFoundError(f"Undistortion calibration file not found for topic {topic}: {calib}")
 
