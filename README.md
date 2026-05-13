@@ -38,6 +38,13 @@ conda activate rosbagkit
 pip install -e .
 ```
 
+### Option 3: `docker`
+From the `rosbagkit` directory:
+```bash
+./docker/build_docker.sh
+./docker/run_docker.sh <path-to-data-dir>
+```
+
 ## Usage
 
 ### Extract bag contents from a YAML config

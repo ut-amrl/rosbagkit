@@ -69,7 +69,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
     && pip install --no-cache-dir .
 
 # External data mount point.
-RUN mkdir -p /workspace/data \
+RUN mkdir -p /workspace/rosbagkit/data \
     && chown -R "${USER_UID}:${USER_GID}" /workspace
 
 USER ${USERNAME}

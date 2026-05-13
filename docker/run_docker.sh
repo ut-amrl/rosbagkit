@@ -13,7 +13,7 @@ usage() {
   echo "  $0 \$HOME/rosbags"
   echo
   echo "The provided host data directory will be mounted to:"
-  echo "  /workspace/data"
+  echo "  /workspace/rosbagkit/data"
   echo
 }
 
@@ -41,7 +41,7 @@ HOST_CONFIG_DIR="${SCRIPT_DIR}/../config" # relative to rosbagkit/docker
 
 docker run -it --rm \
   --name rosbagkit \
-  -v "${HOST_DATA_DIR}:/workspace/data:rw" \
+  -v "${HOST_DATA_DIR}:/workspace/rosbagkit/data:rw" \
   -v "${HOST_CONFIG_DIR}:/workspace/rosbagkit/config:rw" \
   -w /workspace/rosbagkit \
   "${IMAGE_NAME}"
