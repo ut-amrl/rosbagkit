@@ -1,0 +1,95 @@
+bagfile_root: /home/bpp/data/HCFS/raw
+output_root: /home/bpp/data/HCFS/processed
+
+topics:
+  /camera/camera/color/image_raw:
+    format: image
+    outdir: image_raw
+    undistortion:
+      enabled: true
+      calib: third_trail_loop/camera_camera_color_intrinsics.yaml
+  /camera/camera/depth/image_rect_raw:
+    format: depth
+    outdir: depth
+  /super_odometry/state_estimation:
+    format: csv
+    outpath: superodom_lio.csv
+
+sync:
+  enabled: true
+  topics:
+    - /camera/camera/color/image_raw
+    - /camera/camera/depth/image_rect_raw
+  threshold: 0.005
+
+scenes:
+  third_trail_loop1:
+    bagfiles:
+      - third_trail_loop
+    start: 1778717310.44216
+    end: 1778717370.44216
+  third_trail_loop2:
+    bagfiles:
+      - third_trail_loop
+    start: 1778717370.44216
+    end: 1778717430.44216
+  third_trail_loop3:
+    bagfiles:
+      - third_trail_loop
+    start: 1778717430.44216
+    end: 1778717490.44216
+  third_trail_loop4:
+    bagfiles:
+      - third_trail_loop
+    start: 1778717490.44216
+    end: 1778717550.44216
+  third_trail_loop5:
+    bagfiles:
+      - third_trail_loop
+    start: 1778717550.44216
+    end: 1778717610.44216
+  third_trail_loop6:
+    bagfiles:
+      - third_trail_loop
+    start: 1778717610.44216
+    end: 1778717670.44216
+  third_trail_loop7:
+    bagfiles:
+      - third_trail_loop
+    start: 1778717670.44216
+    end: 1778717700.44216
+  third_trail_loop8:
+    bagfiles:
+      - third_trail_loop
+    start: 1778717700.44216
+    end: 1778717730.44216
+  third_trail_loop9:
+    bagfiles:
+      - third_trail_loop
+    start: 1778717730.44216
+    end: 1778717760.44216
+  third_trail_loop10:
+    bagfiles:
+      - third_trail_loop
+    start: 1778717760.44216
+    end: 1778717780.44216
+  third_trail_loop11: # skip 40 sec
+    bagfiles:
+      - third_trail_loop
+    start: 1778717820.44216
+    end: 1778717920.44216
+  third_trail_loop12:
+    bagfiles:
+      - third_trail_loop
+    start: 1778717920.44216
+    end: 1778717990.44216
+  third_trail_loop13:
+    bagfiles:
+      - third_trail_loop
+    start: 1778717990.44216
+    end: 1778718032.44216
+  third_trail_loop14:
+    bagfiles:
+      - third_trail_loop
+    start: 1778718065.44216
+    end: 1778718125.44216

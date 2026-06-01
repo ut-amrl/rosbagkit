@@ -1,0 +1,90 @@
+bagfile_root: /home/bpp/data/HCFS/raw
+output_root: /home/bpp/data/HCFS/processed
+
+topics:
+  /camera/camera/color/image_raw:
+    format: image
+    outdir: image_raw
+    undistortion:
+      enabled: true
+      calib: second_trail_road_loop/camera_camera_color_intrinsics.yaml
+  /camera/camera/depth/image_rect_raw:
+    format: depth
+    outdir: depth
+  /super_odometry/state_estimation:
+    format: csv
+    outpath: superodom_lio.csv
+
+sync:
+  enabled: true
+  topics:
+    - /camera/camera/color/image_raw
+    - /camera/camera/depth/image_rect_raw
+  threshold: 0.005
+
+scenes:
+  second_trail_road_loop1:
+    bagfiles:
+      - second_trail_road_loop
+    start: 1778717224.66602
+    end: 1778717334.67
+  second_trail_road_loop2:
+    bagfiles:
+      - second_trail_road_loop
+    start: 1778717334.67
+    end: 1778717385.0
+  second_trail_road_loop3:
+    bagfiles:
+      - second_trail_road_loop
+    start: 1778717385.0
+    end: 1778717455.67
+  second_trail_road_loop4:
+    bagfiles:
+      - second_trail_road_loop
+    start: 1778717455.67
+    end: 1778717485.67
+  second_trail_road_loop5: # skipping 20 sec
+    bagfiles:
+      - second_trail_road_loop
+    start: 1778717505.67
+    end: 1778717545.67
+  second_trail_road_loop6:
+    bagfiles:
+      - second_trail_road_loop
+    start: 1778717545.67
+    end: 1778717600.67
+  second_trail_road_loop7:
+    bagfiles:
+      - second_trail_road_loop
+    start: 1778717600.67
+    end: 1778717680.67
+  second_trail_road_loop8:
+    bagfiles:
+      - second_trail_road_loop
+    start: 1778717680.67
+    end: 1778717760.67
+  second_trail_road_loop9:
+    bagfiles:
+      - second_trail_road_loop
+    start: 1778717760.67
+    end: 1778717830.67
+  second_trail_road_loop10:
+    bagfiles:
+      - second_trail_road_loop
+    start: 1778717830.67
+    end: 1778717910.67
+  second_trail_road_loop11:
+    bagfiles:
+      - second_trail_road_loop
+    start: 1778717910.67
+    end: 1778717980.67
+  second_trail_road_loop12:
+    bagfiles:
+      - second_trail_road_loop
+    start: 1778717980.67
+    end: 1778718050.67
+  second_trail_road_loop13:
+    bagfiles:
+      - second_trail_road_loop
+    start: 1778718050.67
+    end: 1778718150.67
